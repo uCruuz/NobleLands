@@ -21,7 +21,7 @@
       <table v-if="buildQueue.length" class="buildings-table queue-table">
         <thead>
           <tr>
-            <th colspan="2">Construção</th>
+            <th>Construção</th>
             <th>Duração</th>
             <th>Conclusão</th>
             <th>Cancelamento</th>
@@ -31,14 +31,14 @@
           <template v-for="job in buildQueue" :key="job.buildingKey">
             <!-- Linha principal -->
             <tr class="building-row queue-row">
-              <td class="col-thumb">
+              <td class="col-building">
                 <img :src="getBuildingThumb(job.buildingKey)" class="building-thumb" alt="" />
-              </td>
-              <td class="col-name">
-                <a href="#" class="building-link" @click.prevent="goToBuilding(job.buildingKey)">
-                  {{ BUILDING_CONFIGS[job.buildingKey]?.name }}
-                </a>
-                <span class="building-cur-level">Nível {{ job.targetLevel }}</span>
+                <div class="building-info">
+                  <a href="#" class="building-link" @click.prevent="goToBuilding(job.buildingKey)">
+                    {{ BUILDING_CONFIGS[job.buildingKey]?.name }}
+                  </a>
+                  <span class="building-cur-level">Nível {{ job.targetLevel }}</span>
+                </div>
               </td>
               <td class="col-queue-duration">{{ formatTimeLeft(job.endsAt) }}</td>
               <td class="col-queue-conclusion">hoje às {{ formatEndTime(job.endsAt) }}</td>
@@ -48,7 +48,7 @@
             </tr>
             <!-- Linha da barra de progresso: ocupa toda a largura -->
             <tr class="queue-progress-row">
-              <td colspan="5" class="queue-progress-cell">
+              <td colspan="4" class="queue-progress-cell">
                 <div class="queue-progress-bar">
                   <div class="queue-progress-fill" :style="{ width: getProgress(job) + '%' }"></div>
                 </div>
@@ -62,7 +62,7 @@
       <table class="buildings-table" v-if="availableBuildings.length">
         <thead>
           <tr>
-            <th colspan="2">Edifícios</th>
+            <th>Edifícios</th>
             <th colspan="5">Requerimentos</th>
             <th>Construir</th>
             <th></th>
@@ -70,17 +70,15 @@
         </thead>
         <tbody>
           <tr v-for="b in availableBuildings" :key="b.key" class="building-row">
-            <!-- Ícone -->
-            <td class="col-thumb">
+            <!-- Ícone + Nome -->
+            <td class="col-building">
               <img :src="getBuildingThumb(b.key)" class="building-thumb" alt="" />
-            </td>
-
-            <!-- Nome + Nível -->
-            <td class="col-name">
-              <a href="#" class="building-link" @click.prevent="goToBuilding(b.key)">
-                {{ b.config.name }}
-              </a>
-              <span class="building-cur-level">Nível {{ b.currentLevel }}</span>
+              <div class="building-info">
+                <a href="#" class="building-link" @click.prevent="goToBuilding(b.key)">
+                  {{ b.config.name }}
+                </a>
+                <span class="building-cur-level">Nível {{ b.currentLevel }}</span>
+              </div>
             </td>
 
             <!-- Edifício totalmente construído -->
@@ -159,17 +157,17 @@
       <table class="buildings-table buildings-table--locked" v-if="lockedBuildings.length">
         <thead>
           <tr>
-            <th colspan="2">Ainda não disponível</th>
+            <th>Ainda não disponível</th>
             <th colspan="4">Requerimentos</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="b in lockedBuildings" :key="b.key" class="building-row building-row--locked">
-            <td class="col-thumb">
+            <td class="col-building">
               <img :src="getBuildingThumb(b.key)" class="building-thumb building-thumb--locked" alt="" />
-            </td>
-            <td class="col-name">
-              <span class="building-link--locked">{{ b.config.name }}</span>
+              <div class="building-info">
+                <span class="building-link--locked">{{ b.config.name }}</span>
+              </div>
             </td>
             <td class="col-reqs" colspan="4">
               <span
@@ -441,14 +439,14 @@ onUnmounted(() => clearInterval(tickInterval))
   background-color: #b0a080;
   background-image: url('/assets/tableheader_bg3.webp');
 }
-.building-row td {
-  background: #fff8e8;
+.building-row td, .building-row--locked td {
+  background: #f4e4bc;
   vertical-align: middle;
 }
-.building-row:nth-child(even) td { background: #faf0d0; }
-.building-row:nth-child(odd)  td { background: #fff8e8; }
-.building-row--locked:nth-child(even) td { background: #eee8d0; }
-.building-row--locked:nth-child(odd)  td { background: #f5f0e0; }
+.building-row:nth-child(even) td { background: #f4e4bc; }
+.building-row:nth-child(odd)  td { background: #f4e4bc; }
+.building-row--locked:nth-child(even) td { background: #f4e4bc; }
+.building-row--locked:nth-child(odd)  td { background: #f4e4bc; }
 
 /* ── Fila de construção ── */
 .queue-row td {
@@ -473,10 +471,9 @@ onUnmounted(() => clearInterval(tickInterval))
 /* Linha da barra de progresso */
 .queue-progress-row td {
   padding: 0 !important;
-  background: #fff8e8;
+  background: #f4e4bc;
 }
-.building-row:nth-child(4n+1) ~ .queue-progress-row td { background: #fff8e8; }
-.building-row:nth-child(4n+3) ~ .queue-progress-row td { background: #faf0d0; }
+.queue-progress-row td { background: #f4e4bc; }
 
 .queue-progress-cell {
   padding: 0 !important;
@@ -494,17 +491,28 @@ onUnmounted(() => clearInterval(tickInterval))
   transition: width 0.9s linear;
 }
 
-/* ── Células comuns ── */
-.col-thumb { width: 36px; padding: 3px 4px; }
+/* ── Célula unificada ícone + nome ── */
+.col-building {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px 3px 4px;
+  min-width: 160px;
+}
 .building-thumb {
   width: 35px;
   height: 35px;
   object-fit: contain;
   display: block;
+  flex-shrink: 0;
 }
 .building-thumb--locked { filter: grayscale(1) opacity(0.5); }
 
-.col-name { padding: 3px 8px; min-width: 130px; }
+.building-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
 .building-link {
   display: block;
   font-weight: bold;
@@ -639,7 +647,7 @@ onUnmounted(() => clearInterval(tickInterval))
 .rename-row     { display: flex; gap: 6px; align-items: center; }
 .rename-input {
   border: 1px solid #8b6535;
-  background: #fff8e8;
+  background: #f4e4bc;
   padding: 3px 6px;
   font-size: 12px;
   color: #3b2200;

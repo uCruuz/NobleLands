@@ -151,7 +151,7 @@
                   <div class="ap-col-title">Infantaria</div>
                   <div v-for="key in INFANTRY" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/assets/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
                            :title="UNIT_CONFIGS[key].name" />
                     </div>
@@ -168,7 +168,7 @@
                   <div class="ap-col-title">Cavalaria</div>
                   <div v-for="key in CAVALRY" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/assets/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
                            :title="UNIT_CONFIGS[key].name" />
                     </div>
@@ -185,7 +185,7 @@
                   <div class="ap-col-title">Armas de cerco</div>
                   <div v-for="key in SIEGE" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/assets/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
                            :title="UNIT_CONFIGS[key].name" />
                     </div>
@@ -202,7 +202,7 @@
     <div class="ap-col-title">Outros</div>
     <div v-for="key in OTHER" :key="key" class="ap-unit-row">
       <div class="ap-unit-icon-wrap">
-        <img :src="`/assets/units/${UNIT_CONFIGS[key].img}`"
+        <img :src="`/units/${UNIT_CONFIGS[key].img}`"
              :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
              :title="UNIT_CONFIGS[key].name" />
       </div>

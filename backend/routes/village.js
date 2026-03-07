@@ -228,9 +228,9 @@ router.post('/build', async (req, res) => {
       )
       const { getStorageCapacity } = await import('../../shared/buildings.js')
       const cap   = getStorageCapacity(storRows[0]?.level ?? 1)
-      const wood  = Math.min(cap, resources.wood  + r.wood_rate  * (delta / 3600))
-      const stone = Math.min(cap, resources.stone + r.stone_rate * (delta / 3600))
-      const iron  = Math.min(cap, resources.iron  + r.iron_rate  * (delta / 3600))
+      const wood  = Math.floor(Math.min(cap, Number(resources.wood)  + Number(r.wood_rate)  * (delta / 3600)))
+      const stone = Math.floor(Math.min(cap, Number(resources.stone) + Number(r.stone_rate) * (delta / 3600)))
+      const iron  = Math.floor(Math.min(cap, Number(resources.iron)  + Number(r.iron_rate)  * (delta / 3600)))
 
       if (wood  < cost.wood)  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Madeira insuficiente.' }) }
       if (stone < cost.stone) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Argila insuficiente.' }) }
@@ -238,7 +238,7 @@ router.post('/build', async (req, res) => {
 
       await client.query(
         `UPDATE village_resources
-         SET wood = $1 - $4, stone = $2 - $5, iron = $3 - $6, last_updated = $7
+         SET wood = $1::integer - $4::integer, stone = $2::integer - $5::integer, iron = $3::integer - $6::integer, last_updated = $7
          WHERE village_id = $8`,
         [wood, stone, iron, cost.wood, cost.stone, cost.iron, now, village.id]
       )

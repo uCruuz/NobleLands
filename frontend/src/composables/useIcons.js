@@ -50,7 +50,7 @@ export const ICONS = {
   sem_msg_tribo:       16,
   bandeiras:           17,
   nova_bandeira:       18,
-  placeholder_19:      19, // * — nome desconhecido
+  relogio:             19,
 
   // Linha 3 (20–29)
   mapa1:               20,
