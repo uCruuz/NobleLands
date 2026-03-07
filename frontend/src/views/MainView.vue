@@ -428,16 +428,16 @@ onUnmounted(() => clearInterval(tickInterval))
   text-align: left;
   font-weight: 700;
   background-color: #c1a264;
-  background-image: url('/assets/tableheader_bg3.webp');
+  background-image: url('/tableheader_bg3.webp');
   background-repeat: repeat-x;
   position: relative;
   padding: 4px 6px;
   white-space: nowrap;
-  color: #3b2200;
+  color: #000000;
 }
 .buildings-table--locked thead th {
   background-color: #b0a080;
-  background-image: url('/assets/tableheader_bg3.webp');
+  background-image: url('/tableheader_bg3.webp');
 }
 .building-row td, .building-row--locked td {
   background: #f4e4bc;
