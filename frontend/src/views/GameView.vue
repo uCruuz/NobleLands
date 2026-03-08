@@ -13,7 +13,8 @@ import BuildingView from './BuildingView.vue'
 import BarracksView from './BarracksView.vue'
 import SmithView    from './SmithView.vue'
 import MapView      from './MapView.vue'
-import PlaceView  from './PlaceView.vue'
+import PlaceView    from './PlaceView.vue'
+import ReportsView  from './ReportsView.vue'
 
 const route        = useRoute()
 const villageStore = useVillageStore()
@@ -46,6 +47,7 @@ const screens = {
   hide:     BuildingView,
   church:   BuildingView,
   wall:     BuildingView,
+  reports:  ReportsView,
 }
 
 const currentScreen = computed(() =>

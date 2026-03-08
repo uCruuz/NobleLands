@@ -172,7 +172,7 @@ function handleLogout() {
 const navButtons = [
   { label: 'Visualização geral', action: () => router.push(`/game?world=${villageStore.worldId}&village=${village.value.id}&screen=overview`) },
   { label: 'Mapa',               action: () => router.push(`/game?world=${villageStore.worldId}&village=${village.value.id}&screen=map`) },
-  { label: 'Relatórios',         action: null },
+  { label: 'Relatórios',         action: () => router.push(`/game?world=${villageStore.worldId}&village=${village.value.id}&screen=reports`) },
   { label: 'Mensagens',          action: null },
   { label: 'Classificação',      action: null },
   { label: 'Tribo',              action: null },
