@@ -206,19 +206,28 @@ export function useMapCanvas(worldId) {
       const ux = sx + (ex - sx) * progress
       const uy = sy + (ey - sy) * progress
 
-      // Cores por tipo
-      const colorAttack  = cmd.type === 'attack'
-        ? 'rgba(200, 40, 40, 0.85)'
-        : 'rgba(60, 160, 60, 0.85)'
-      const colorDashed  = cmd.type === 'attack'
-        ? 'rgba(200, 40, 40, 0.40)'
-        : 'rgba(60, 160, 60, 0.40)'
+      // ── Cores por perspectiva ─────────────────────────────────────────
+      // own + attack    → verde
+      // own + returning → verde mais claro
+      // incoming_attack → vermelho
+      // (azul = ally, futuro)
+      let colorSolid, colorDashed, colorCircle
+      if (cmd.perspective === 'incoming_attack') {
+        colorSolid  = 'rgba(210, 35, 35, 0.90)'
+        colorDashed = 'rgba(210, 35, 35, 0.40)'
+        colorCircle = 'rgba(150, 15, 15, 0.92)'
+      } else {
+        // own — verde independente de tipo por enquanto
+        colorSolid  = 'rgba(40, 160, 60, 0.90)'
+        colorDashed = 'rgba(40, 160, 60, 0.40)'
+        colorCircle = 'rgba(20, 110, 35, 0.92)'
+      }
 
       // ── Linha sólida: origem → posição atual ─────────────────────────
       ctx.beginPath()
       ctx.moveTo(sx, sy)
       ctx.lineTo(ux, uy)
-      ctx.strokeStyle = colorAttack
+      ctx.strokeStyle = colorSolid
       ctx.lineWidth   = 2
       ctx.setLineDash([])
       ctx.stroke()
@@ -235,22 +244,19 @@ export function useMapCanvas(worldId) {
       ctx.setLineDash([])
       ctx.lineDashOffset = 0
 
-      // ── Ponto de destino (X para ataque, escudo para apoio) ──────────
+      // ── Ponto de destino ──────────────────────────────────────────────
       ctx.beginPath()
       ctx.arc(ex, ey, 5, 0, Math.PI * 2)
-      ctx.fillStyle = colorAttack
+      ctx.fillStyle = colorSolid
       ctx.fill()
       ctx.strokeStyle = '#fff'
       ctx.lineWidth   = 1
       ctx.stroke()
 
       // ── Ícone da unidade mais lenta com círculo ───────────────────────
-      // Círculo de fundo
       ctx.beginPath()
       ctx.arc(ux, uy, ICON_RADIUS, 0, Math.PI * 2)
-      ctx.fillStyle = cmd.type === 'attack'
-        ? 'rgba(140, 20, 20, 0.92)'
-        : 'rgba(30, 100, 30, 0.92)'
+      ctx.fillStyle = colorCircle
       ctx.fill()
       ctx.strokeStyle = '#fff'
       ctx.lineWidth   = 1.5
