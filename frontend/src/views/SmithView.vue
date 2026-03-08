@@ -23,27 +23,28 @@
           <strong>{{ formatTimeLeft(researchQueue[0].endsAt) }}</strong>
         </div>
 
-        <table class="queue-table">
+        <table class="buildings-table">
           <thead>
             <tr>
               <th>Pesquisa</th>
               <th>Duração</th>
-             <th>Conclusão</th>
+              <th>Conclusão</th>
               <th>Cancelar *</th>
             </tr>
           </thead>
-         <tbody>
-            <tr v-for="job in researchQueue" :key="job.unitKey" class="queue-row">
-              <td class="qcol-unit">
-                <div class="unit-sprite" :style="spriteStyle(job.unitKey, true)"></div>
-                {{ RESEARCH_CONFIGS[job.unitKey]?.name }}
+          <tbody>
+            <tr v-for="job in researchQueue" :key="job.unitKey" class="building-row">
+              <td class="col-building">
+                <img :src="`/units/${UNIT_CONFIGS[job.unitKey]?.img}`" class="building-thumb" alt="" />
+                <div class="building-info">
+                  <span class="building-link">{{ RESEARCH_CONFIGS[job.unitKey]?.name }}</span>
+                  <span class="building-cur-level">Em pesquisa</span>
+                </div>
               </td>
-              <td class="qcol-dur">{{ formatBuildTime(RESEARCH_CONFIGS[job.unitKey]?.researchTime ?? 0) }}</td>
-              <td class="qcol-end">{{ formatConclusion(job.endsAt) }}</td>
-              <td class="qcol-cancel">
-                <button class="cancel-train-btn" @click="cancelResearch(job.unitKey)">
-                  ✕ Cancelar
-                </button>
+              <td class="col-dur">{{ formatBuildTime(RESEARCH_CONFIGS[job.unitKey]?.researchTime ?? 0) }}</td>
+              <td class="col-end">{{ formatConclusion(job.endsAt) }}</td>
+              <td class="col-cancel">
+                <button class="cancel-btn" @click="cancelResearch(job.unitKey)">Cancelar</button>
               </td>
             </tr>
           </tbody>
@@ -51,85 +52,90 @@
         <p class="queue-refund-note">*(os recursos serão devolvidos ao seu armazém)</p>
       </template>
 
-      <!-- ── Tabela de pesquisas ── -->
-      <div class="research-columns">
+      <!-- ── Tabela de pesquisas (3 colunas) ── -->
+      <table class="buildings-table research-table">
+        <thead>
+          <tr>
+            <th>Infantaria</th>
+            <th>Cavalaria</th>
+            <th>Armas de cerco</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="rowIdx in maxCategoryRows" :key="rowIdx" class="building-row">
+            <td
+              v-for="cat in categories"
+              :key="cat.key"
+              class="col-research"
+            >
+              <template v-if="categoryUnits(cat.key)[rowIdx - 1]">
+                <div class="research-unit-info">
 
-        <div v-for="cat in categories" :key="cat.key" class="research-category">
-          <div class="category-header">{{ cat.label }}</div>
+                  <!-- Ícone -->
+                  <div class="icon-wrap">
+                    <img
+                      :src="`/units/${UNIT_CONFIGS[categoryUnits(cat.key)[rowIdx - 1].key]?.img}`"
+                      class="unit-icon"
+                      :class="{
+                        'unit-icon--color': isResearched(categoryUnits(cat.key)[rowIdx - 1].key) || isInQueue(categoryUnits(cat.key)[rowIdx - 1].key),
+                        'unit-icon--grey':  !isResearched(categoryUnits(cat.key)[rowIdx - 1].key) && !isInQueue(categoryUnits(cat.key)[rowIdx - 1].key),
+                      }"
+                      alt=""
+                    />
+                    <div v-if="!isResearched(categoryUnits(cat.key)[rowIdx - 1].key) && !isInQueue(categoryUnits(cat.key)[rowIdx - 1].key)" class="icon-x"></div>
+                  </div>
 
-          <div
-            v-for="u in categoryUnits(cat.key)"
-            :key="u.key"
-            class="research-row"
-            :class="{
-              'research-row--researched':  isResearched(u.key),
-              'research-row--unavailable': !isResearched(u.key) && !canResearch(u.key),
-            }"
-          >
-            <div class="research-unit-info">
+                  <!-- Texto -->
+                  <div class="research-unit-text">
+                    <span class="research-unit-name">{{ categoryUnits(cat.key)[rowIdx - 1].name }}</span>
 
-              <!-- Ícone sprite -->
-              <div class="sprite-wrap">
-                <div
-                  class="unit-sprite"
-                  :style="spriteStyle(u.key, isResearched(u.key) || isInQueue(u.key))"
-                ></div>
-                <div
-                  v-if="!isResearched(u.key) && !isInQueue(u.key)"
-                  class="sprite-x"
-                ></div>
-              </div>
-
-              <!-- Texto -->
-              <div class="research-unit-text">
-                <span class="research-unit-name">{{ u.name }}</span>
-
-                <template v-if="isResearched(u.key)">
-                  <span class="research-status--done">Pesquisado</span>
-                </template>
-
-                <template v-else-if="isInQueue(u.key)">
-                  <span class="research-status--progress">Pesquisando...</span>
-                </template>
-
-                <template v-else-if="!canResearch(u.key)">
-                  <span class="research-status--req">Requisitos em falta:</span>
-                  <span
-                    v-for="(reqLevel, reqKey) in u.requires"
-                    :key="reqKey"
-                    class="research-req req-unmet"
-                  >
-                    {{ BUILDING_NAMES[reqKey] }} ({{ reqLevel }})
-                  </span>
-                </template>
-
-                <template v-else>
-                  <div class="research-cost">
-                    <template v-if="u.researchCost.wood">
-                      <i class="icon" :style="iconStyle('madeira')"></i>{{ u.researchCost.wood }}
+                    <template v-if="isResearched(categoryUnits(cat.key)[rowIdx - 1].key)">
+                      <span class="research-status--done">Pesquisado</span>
                     </template>
-                    <template v-if="u.researchCost.stone">
-                      <i class="icon" :style="iconStyle('argila')"></i>{{ u.researchCost.stone }}
+
+                    <template v-else-if="isInQueue(categoryUnits(cat.key)[rowIdx - 1].key)">
+                      <span class="research-status--progress">Pesquisando...</span>
                     </template>
-                    <template v-if="u.researchCost.iron">
-                      <i class="icon" :style="iconStyle('ferro')"></i>{{ u.researchCost.iron }}
+
+                    <template v-else-if="!canResearch(categoryUnits(cat.key)[rowIdx - 1].key)">
+                      <span class="research-status--req">Requisitos em falta:</span>
+                      <span
+                        v-for="(reqLevel, reqKey) in categoryUnits(cat.key)[rowIdx - 1].requires"
+                        :key="reqKey"
+                        class="research-req req-unmet"
+                      >
+                        {{ BUILDING_NAMES[reqKey] }} ({{ reqLevel }})
+                      </span>
+                    </template>
+
+                    <template v-else>
+                      <div class="research-cost">
+                        <template v-if="categoryUnits(cat.key)[rowIdx - 1].researchCost.wood">
+                          <i class="icon" :style="iconStyle('madeira')"></i>{{ categoryUnits(cat.key)[rowIdx - 1].researchCost.wood }}
+                        </template>
+                        <template v-if="categoryUnits(cat.key)[rowIdx - 1].researchCost.stone">
+                          <i class="icon" :style="iconStyle('argila')"></i>{{ categoryUnits(cat.key)[rowIdx - 1].researchCost.stone }}
+                        </template>
+                        <template v-if="categoryUnits(cat.key)[rowIdx - 1].researchCost.iron">
+                          <i class="icon" :style="iconStyle('ferro')"></i>{{ categoryUnits(cat.key)[rowIdx - 1].researchCost.iron }}
+                        </template>
+                      </div>
+                      <button
+                        class="research-btn"
+                        :disabled="!!researchQueue.length || !canAffordAll(categoryUnits(cat.key)[rowIdx - 1])"
+                        @click="startResearch(categoryUnits(cat.key)[rowIdx - 1].key)"
+                      >
+                        {{ formatBuildTime(categoryUnits(cat.key)[rowIdx - 1].researchTime) }}
+                      </button>
                     </template>
                   </div>
-                  <button
-                    class="research-btn"
-                    :disabled="!!researchQueue.length"
-                    @click="startResearch(u.key)"
-                  >
-                    Pesquisar
-                  </button>
-                </template>
-              </div>
 
-            </div>
-          </div>
-        </div>
-
-      </div>
+                </div>
+              </template>
+            </td>
+          </tr>
+        </tbody>
+      </table>
 
       <!-- ── Erro ── -->
       <div v-if="errorMsg" class="build-error">{{ errorMsg }}</div>
@@ -147,8 +153,9 @@ import { useVillageStore } from '../stores/village.js'
 import { useAuthStore } from '../stores/auth.js'
 import { useIcons } from '../composables/useIcons.js'
 import { formatBuildTime } from '../../../shared/buildings.js'
+import { UNIT_CONFIGS } from '../../../shared/units.js' // spear, sword, axe, archer, spy, light, marcher, heavy, ram, catapult, knight, snob
 
-const API = 'http://localhost:9999/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 
 const route        = useRoute()
 const villageStore = useVillageStore()
@@ -224,52 +231,30 @@ const RESEARCH_CONFIGS = {
   },
 }
 
-const SPRITE_MAP = {
-  sword:    { grey: [0, 0],  color: [0, 1]  },
-  spear:    { grey: [0, 3],  color: [0, 4]  },
-  ram:      { grey: [0, 6],  color: [0, 7]  },
-  marcher:  { grey: [0, 8],  color: [0, 9]  },
-  knight:   { grey: [0, 11], color: [0, 11] },
-  catapult: { grey: [0, 13], color: [0, 14] },
-  archer:   { grey: [0, 16], color: [0, 17] },
-  spy:      { grey: [1, 2],  color: [1, 3]  },
-  snob:     { grey: [1, 4],  color: [1, 5]  },
-  light:    { grey: [1, 9],  color: [1, 10] },
-  heavy:    { grey: [1, 11], color: [1, 12] },
-  axe:      { grey: [1, 14], color: [1, 15] },
-}
-
-const FRAME = 60
-const COLS  = 18
-const ROWS  = 2
-
-function spriteStyle(key, isColor) {
-  const entry = SPRITE_MAP[key]
-  if (!entry) return {}
-  const [row, col] = isColor ? entry.color : entry.grey
-  return {
-    width:              `${FRAME}px`,
-    height:             `${FRAME}px`,
-    backgroundImage:    `url('/assets/units/unit_big.webp')`,
-    backgroundSize:     `${COLS * FRAME}px ${ROWS * FRAME}px`,
-    backgroundPosition: `-${col * FRAME}px -${row * FRAME}px`,
-    backgroundRepeat:   'no-repeat',
-    display:            'inline-block',
-    flexShrink:         '0',
-  }
-}
-
 const categories = [
   { key: 'infantry', label: 'Infantaria'     },
   { key: 'cavalry',  label: 'Cavalaria'      },
   { key: 'siege',    label: 'Armas de cerco' },
 ]
 
+// Retorna array de unidades de uma categoria — memoizado por key
+const unitsByCategory = computed(() => {
+  const result = {}
+  for (const cat of categories) {
+    result[cat.key] = Object.entries(RESEARCH_CONFIGS)
+      .filter(([, u]) => u.category === cat.key)
+      .map(([key, u]) => ({ key, ...u }))
+  }
+  return result
+})
+
 function categoryUnits(cat) {
-  return Object.entries(RESEARCH_CONFIGS)
-    .filter(([, u]) => u.category === cat)
-    .map(([key, u]) => ({ key, ...u }))
+  return unitsByCategory.value[cat] ?? []
 }
+
+const maxCategoryRows = computed(() =>
+  Math.max(...categories.map(c => categoryUnits(c.key).length))
+)
 
 function isResearched(key) {
   if (RESEARCH_CONFIGS[key]?.defaultResearched) return true
@@ -285,6 +270,25 @@ function canResearch(key) {
   const reqs = RESEARCH_CONFIGS[key]?.requires ?? {}
   return Object.entries(reqs).every(
     ([reqKey, reqLevel]) => (buildings.value[reqKey] ?? 0) >= reqLevel
+  )
+}
+
+const wood  = computed(() => Math.floor(village.value?.resources.wood.current  ?? 0))
+const stone = computed(() => Math.floor(village.value?.resources.stone.current ?? 0))
+const iron  = computed(() => Math.floor(village.value?.resources.iron.current  ?? 0))
+
+function canAfford(cost, res) {
+  if (res === 'wood')  return wood.value  >= cost
+  if (res === 'stone') return stone.value >= cost
+  if (res === 'iron')  return iron.value  >= cost
+  return true
+}
+
+function canAffordAll(u) {
+  return (
+    canAfford(u.researchCost.wood,  'wood')  &&
+    canAfford(u.researchCost.stone, 'stone') &&
+    canAfford(u.researchCost.iron,  'iron')
   )
 }
 
@@ -381,58 +385,61 @@ onUnmounted(() => clearInterval(tickInterval))
   border-bottom: 1px solid #c8a878;
   padding-bottom: 10px;
 }
-.main-header-img { width: 120px; height: 120px; object-fit: contain; flex-shrink: 0; }
+.main-header-img  { width: 80px; height: 80px; }
 .main-header-info { flex: 1; }
 .main-title { font-size: 20px; font-weight: bold; margin: 0 0 6px 0; color: #000; }
 .main-desc  { font-size: 12px; color: #000; margin: 0; line-height: 1.5; }
 .main-help  { font-size: 11px; color: #8b4513; text-decoration: none; white-space: nowrap; flex-shrink: 0; }
 .main-help:hover { text-decoration: underline; }
 
-/* ── Fila de pesquisa ── */
-.queue-next {
-  background: #c8a460;
-  border: 1px solid #8b6535;
-  padding: 4px 8px;
-  font-size: 11px;
-  font-weight: bold;
-  color: #3b2200;
-}
-.queue-table {
+/* ── Tabela base — idêntica ao MainView ── */
+.buildings-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 2px;
   font-size: 11px;
+  background: #ecd8aa;
 }
-.queue-table thead tr {
-  background: #c8a460;
-  color: #3b2200;
-  font-weight: bold;
-}
-.queue-table thead th {
-  padding: 4px 8px;
+.buildings-table thead th {
+  font-size: 9pt;
   text-align: left;
-  border: 1px solid #8b6535;
+  font-weight: 700;
+  background-color: #c1a264;
+  background-image: url('/tableheader_bg3.webp');
+  background-repeat: repeat-x;
+  padding: 4px 6px;
+  white-space: nowrap;
+  color: #000;
 }
-.queue-row { border-bottom: 1px solid #ddd0a0; background: #fff8e8; }
-.qcol-unit {
+.building-row td {
+  background: #f4e4bc;
+  vertical-align: middle;
+}
+
+/* ── Fila ── */
+.queue-next {
+  background-color: #c1a264;
+  background-image: url('/tableheader_bg3.webp');
+  background-repeat: repeat-x;
+  border: 1px solid #8b6535;
   padding: 4px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #000;
+}
+.col-building {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: bold;
+  gap: 6px;
+  padding: 3px 8px 3px 4px;
 }
-.qcol-dur, .qcol-end { padding: 4px 8px; }
-.qcol-cancel { padding: 4px 8px; }
-.cancel-train-btn {
-  background: #8b2020;
-  border: 1px solid #5a1010;
-  color: #fff;
-  font-size: 11px;
-  font-weight: bold;
-  font-family: Verdana, Arial, sans-serif;
-  padding: 2px 10px;
-  cursor: pointer;
-}
-.cancel-train-btn:hover { background: #6a1010; }
+.building-thumb     { width: 35px; height: 35px; object-fit: contain; display: block; flex-shrink: 0; }
+.building-info      { display: flex; flex-direction: column; gap: 1px; }
+.building-link      { font-weight: bold; color: #8b4513; font-size: 11px; }
+.building-cur-level { color: #7a6040; font-size: 10px; }
+.col-dur, .col-end  { padding: 4px 8px; white-space: nowrap; }
+.col-cancel         { padding: 4px 8px; }
+
 .queue-refund-note {
   font-size: 10px;
   color: #7a6040;
@@ -440,76 +447,47 @@ onUnmounted(() => clearInterval(tickInterval))
   margin: 0;
 }
 
-.queue-item { display: flex; align-items: center; gap: 8px; font-size: 11px; }
-.queue-name { flex: 1; font-weight: bold; }
-.queue-timer { color: #8b4513; font-weight: bold; }
+/* ── Tabela de pesquisas ── */
+.research-table thead th { width: 33.33%; }
 
-/* ── Grid ── */
-.research-columns {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  border: 1px solid #8b6535;
-}
-.research-category { border-right: 1px solid #8b6535; }
-.research-category:last-child { border-right: none; }
-
-.category-header {
-  background: #c8a460;
-  border-bottom: 1px solid #8b6535;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: bold;
-  color: #3b2200;
-}
-
-/* ── Linha ── */
-.research-row {
-  border-bottom: 1px solid #ddd0a0;
+.col-research {
   padding: 6px 8px;
-  min-height: 72px;
-  background: #fff8e8;
-  display: flex;
-  align-items: stretch;
+  width: 33.33%;
+  vertical-align: middle;
 }
-.research-row:nth-child(even)    { background: #f4e4bc; }
-.research-row:last-child         { border-bottom: none; }
-.research-row--researched        { background: #f4e4bc !important; }
-.research-row--unavailable       { background: #f4e4bc !important; }
 
 .research-unit-info {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
-  width: 100%;
 }
 
-/* ── Sprite + X ── */
-.sprite-wrap {
+/* ── Ícone ── */
+.icon-wrap {
   position: relative;
   flex-shrink: 0;
   width: 60px;
   height: 60px;
 }
+.unit-icon          { width: 60px; height: 60px; object-fit: contain; display: block; }
+.unit-icon--color   { filter: none; }
+.unit-icon--grey    { filter: grayscale(1) opacity(0.5); }
 
-.sprite-x {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-.sprite-x::before,
-.sprite-x::after {
+.icon-x { position: absolute; inset: 0; pointer-events: none; }
+.icon-x::before,
+.icon-x::after {
   content: '';
   position: absolute;
   top: 50%;
-  left: 15%;
-  width: 70%;
-  height: 5px;
+  left: 10%;
+  width: 80%;
+  height: 4px;
   background: #cc1111;
   border-radius: 2px;
   transform-origin: center;
 }
-.sprite-x::before { transform: translateY(-50%) rotate(45deg); }
-.sprite-x::after  { transform: translateY(-50%) rotate(-45deg); }
+.icon-x::before { transform: translateY(-50%) rotate(45deg); }
+.icon-x::after  { transform: translateY(-50%) rotate(-45deg); }
 
 /* ── Texto ── */
 .research-unit-text {
@@ -517,18 +495,15 @@ onUnmounted(() => clearInterval(tickInterval))
   display: flex;
   flex-direction: column;
   gap: 3px;
-  justify-content: center;
   min-width: 0;
 }
-.research-unit-name { font-weight: bold; font-size: 12px; color: #3b2200; }
-
+.research-unit-name        { font-weight: bold; font-size: 12px; color: #3b2200; }
 .research-status--done     { font-size: 11px; color: #555; font-style: italic; }
 .research-status--progress { font-size: 11px; color: #8b4513; font-style: italic; }
 .research-status--req      { font-size: 10px; color: #7a6040; }
-
-.research-req { display: block; font-size: 10px; padding-left: 2px; }
-.req-unmet    { color: #9a4020; }
-.req-met      { color: #4a7c2f; }
+.research-req              { display: block; font-size: 10px; padding-left: 2px; }
+.req-unmet                 { color: #9a4020; }
+.req-met                   { color: #4a7c2f; }
 
 .research-cost {
   display: flex;
@@ -540,20 +515,57 @@ onUnmounted(() => clearInterval(tickInterval))
 }
 .research-cost .icon { margin-right: 1px; }
 
+/* ── Botão Pesquisar ── */
 .research-btn {
-  background: #c8a460;
-  border: 1px solid #8b6535;
-  color: #3b2200;
-  font-size: 11px;
+  display: inline-block;
+  margin: 2px 0 0 0;
+  text-align: center;
+  font-family: Verdana, Arial;
+  font-size: 11px !important;
   font-weight: bold;
-  font-family: Verdana, Arial, sans-serif;
-  padding: 2px 10px;
+  line-height: normal;
   cursor: pointer;
+  border-radius: 5px;
+  border: 1px solid #000;
+  color: #fff;
+  white-space: nowrap;
   width: fit-content;
-  margin-top: 2px;
+  padding: 3px 8px 3px 25px;
+  background:
+    url('https://dsbr.innogamescdn.com/asset/7be0fdc5/graphic/btn/buttons.webp') no-repeat 3px -146px,
+    linear-gradient(to bottom, #947a62 0%, #7b5c3d 22%, #6c4824 30%, #6c4824 100%);
 }
-.research-btn:hover:not(:disabled) { background: #b8944a; }
+.research-btn:hover:not(:disabled) {
+  background:
+    url('https://dsbr.innogamescdn.com/asset/7be0fdc5/graphic/btn/buttons.webp') no-repeat 3px -146px,
+    linear-gradient(to bottom, #a08870 0%, #8b6c4d 22%, #7c5834 30%, #7c5834 100%);
+}
 .research-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── Botão Cancelar ── */
+.cancel-btn {
+  display: inline-block;
+  margin: 0 2px;
+  text-align: center;
+  font-family: Verdana, Arial;
+  font-size: 12px !important;
+  font-weight: bold;
+  line-height: normal;
+  cursor: pointer;
+  border-radius: 5px;
+  border: 1px solid #000;
+  color: #fff;
+  white-space: nowrap;
+  padding: 3px 9px 3px 25px;
+  background:
+    url('https://dsbr.innogamescdn.com/asset/7be0fdc5/graphic/btn/buttons.webp') no-repeat 3px -174px,
+    linear-gradient(to bottom, #947a62 0%, #7b5c3d 22%, #6c4824 30%, #6c4824 100%);
+}
+.cancel-btn:hover {
+  background:
+    url('https://dsbr.innogamescdn.com/asset/7be0fdc5/graphic/btn/buttons.webp') no-repeat 3px -174px,
+    linear-gradient(to bottom, #a08870 0%, #8b6c4d 22%, #7c5834 30%, #7c5834 100%);
+}
 
 /* ── Erro ── */
 .build-error {

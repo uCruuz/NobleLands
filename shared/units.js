@@ -18,7 +18,7 @@ export const UNIT_CONFIGS = {
 
   spear: {
     name:        'Lanceiro',
-    img:         'unit_spear.png',
+    img:         'unit_spear.webp',
     building:    'barracks',
     implemented: true,
     wood:  50,  stone: 30,  iron: 10,
@@ -32,7 +32,7 @@ export const UNIT_CONFIGS = {
 
   sword: {
     name:        'Espadachim',
-    img:         'unit_sword.png',
+    img:         'unit_sword.webp',
     building:    'barracks',
     implemented: true,
     wood:  30,  stone: 30,  iron: 70,
@@ -46,7 +46,7 @@ export const UNIT_CONFIGS = {
 
   axe: {
     name:        'Bárbaro',
-    img:         'unit_axe.png',
+    img:         'unit_axe.webp',
     building:    'barracks',
     implemented: true,
     wood:  60,  stone: 30,  iron: 40,
@@ -60,7 +60,7 @@ export const UNIT_CONFIGS = {
 
   archer: {
     name:        'Arqueiro',
-    img:         'unit_archer.png',
+    img:         'unit_archer.webp',
     building:    'barracks',
     implemented: true,
     wood:  100, stone: 30,  iron: 60,
@@ -74,9 +74,9 @@ export const UNIT_CONFIGS = {
 
   // ── Estábulo (stable) ─────────────────────────────────────────────────────
 
-  scout: {
-    name:        'Espião',
-    img:         'unit_spy.png',
+  spy: {
+    name:        'Explorador',
+    img:         'unit_spy.webp',
     building:    'stable',
     implemented: false,
     wood:  50,  stone: 50,  iron: 20,
@@ -90,7 +90,7 @@ export const UNIT_CONFIGS = {
 
   light: {
     name:        'Cavalaria Leve',
-    img:         'unit_light.png',
+    img:         'unit_light.webp',
     building:    'stable',
     implemented: false,
     wood:  125, stone: 100, iron: 250,
@@ -104,7 +104,7 @@ export const UNIT_CONFIGS = {
 
   marcher: {
     name:        'Arqueiro Montado',
-    img:         'unit_marcher.png',
+    img:         'unit_marcher.webp',
     building:    'stable',
     implemented: false,
     wood:  250, stone: 100, iron: 150,
@@ -118,7 +118,7 @@ export const UNIT_CONFIGS = {
 
   heavy: {
     name:        'Cavalaria Pesada',
-    img:         'unit_heavy.png',
+    img:         'unit_heavy.webp',
     building:    'stable',
     implemented: false,
     wood:  200, stone: 150, iron: 600,
@@ -134,7 +134,7 @@ export const UNIT_CONFIGS = {
 
   ram: {
     name:        'Aríete',
-    img:         'unit_ram.png',
+    img:         'unit_ram.webp',
     building:    'workshop',
     implemented: false,
     wood:  300, stone: 200, iron: 200,
@@ -148,7 +148,7 @@ export const UNIT_CONFIGS = {
 
   catapult: {
     name:        'Catapulta',
-    img:         'unit_catapult.png',
+    img:         'unit_catapult.webp',
     building:    'workshop',
     implemented: false,
     wood:  320, stone: 400, iron: 100,
@@ -164,7 +164,7 @@ export const UNIT_CONFIGS = {
 
   knight: {
     name:        'Paladino',
-    img:         'unit_knight.png',
+    img:         'unit_knight.webp',
     building:    'statue',
     implemented: false,
     wood:  20,  stone: 20,  iron: 40,
@@ -178,7 +178,7 @@ export const UNIT_CONFIGS = {
 
   snob: {
     name:        'Nobre',
-    img:         'unit_snob.png',
+    img:         'unit_snob.webp',
     building:    'snob',
     implemented: false,
     wood:  40000, stone: 50000, iron: 50000,
@@ -194,7 +194,7 @@ export const UNIT_CONFIGS = {
 
   militia: {
     name:        'Milícia',
-    img:         'unit_militia.png',
+    img:         'unit_militia.webp',
     building:    'barracks',
     implemented: false,
     wood:  0,   stone: 0,   iron: 0,

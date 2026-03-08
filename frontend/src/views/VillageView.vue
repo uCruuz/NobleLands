@@ -312,16 +312,16 @@ function openBuilding(key) {
 }
 
 const unitList = [
-  { key: 'spear',    name: 'Lanceiro',         img: 'unit_spear.png',    count: 0 },
-  { key: 'sword',    name: 'Espadachim',       img: 'unit_sword.png',    count: 0 },
-  { key: 'axe',      name: 'Machado',          img: 'unit_axe.png',      count: 0 },
-  { key: 'spy',      name: 'Espião',           img: 'unit_spy.png',      count: 0 },
-  { key: 'light',    name: 'Cavalaria Leve',   img: 'unit_light.png',    count: 0 },
-  { key: 'heavy',    name: 'Cavalaria Pesada', img: 'unit_heavy.png',    count: 0 },
-  { key: 'ram',      name: 'Aríete',           img: 'unit_ram.png',      count: 0 },
-  { key: 'catapult', name: 'Catapulta',        img: 'unit_catapult.png', count: 0 },
-  { key: 'knight',   name: 'Paladino',         img: 'unit_knight.png',   count: 0 },
-  { key: 'snob',     name: 'Nobre',            img: 'unit_snob.png',     count: 0 },
+  { key: 'spear',    name: 'Lanceiro',         img: 'unit_spear.webp',    count: 0 },
+  { key: 'sword',    name: 'Espadachim',       img: 'unit_sword.webp',    count: 0 },
+  { key: 'axe',      name: 'Machado',          img: 'unit_axe.webp',      count: 0 },
+  { key: 'spy',      name: 'Espião',           img: 'unit_spy.webp',      count: 0 },
+  { key: 'light',    name: 'Cavalaria Leve',   img: 'unit_light.webp',    count: 0 },
+  { key: 'heavy',    name: 'Cavalaria Pesada', img: 'unit_heavy.webp',    count: 0 },
+  { key: 'ram',      name: 'Aríete',           img: 'unit_ram.webp',      count: 0 },
+  { key: 'catapult', name: 'Catapulta',        img: 'unit_catapult.webp', count: 0 },
+  { key: 'knight',   name: 'Paladino',         img: 'unit_knight.webp',   count: 0 },
+  { key: 'snob',     name: 'Nobre',            img: 'unit_snob.webp',     count: 0 },
 ]
 
 let tickInterval = null
