@@ -37,7 +37,7 @@
                   {{ tooltip.village.player_name ?? 'Bárbara' }} — {{ tooltip.village.points }} pts
                 </div>
 
-                <!-- Clique: botão atacar no canto superior esquerdo da aldeia -->
+                <!-- Clique: botão atacar -->
                 <div
                   v-if="clickedVillage"
                   class="map-ctx-popup"
@@ -134,7 +134,7 @@
         </div>
       </div>
 
-      <!-- ── Painel "Distribuir ordens" ────────────────────────────────── -->
+      <!-- ── Painel "Distribuir ordens" ── -->
       <Teleport to="body">
         <div v-if="attackPanel" class="ap-overlay" @click.self="attackPanel = null">
           <div class="ap-modal">
@@ -149,7 +149,6 @@
               <div class="ap-units-area">
                 <div class="ap-col">
                   <div class="ap-col-title">Infantaria</div>
-                  <!-- ✅ CORRIGIDO: optional chaining em UNIT_CONFIGS[key] -->
                   <div v-for="key in INFANTRY" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
                       <img :src="`/units/${UNIT_CONFIGS[key]?.img}`"
@@ -270,6 +269,19 @@ import { useIcons } from '../composables/useIcons.js'
 import { UNIT_CONFIGS } from '../../../shared/units.js'
 import MiniMap from '../components/MiniMap.vue'
 
+// ── Fetch de comandos ativos para overlay do mapa ─────────────────────────
+async function fetchMapCommands(API, worldId, authToken, setCommands) {
+  try {
+    const { data } = await axios.get(`${API}/commands`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+      params:  { worldId },
+    })
+    setCommands(data.commands ?? [], UNIT_CONFIGS)
+  } catch (e) {
+    console.error('[MapView] Erro ao carregar comandos para overlay:', e)
+  }
+}
+
 const API          = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 const route        = useRoute()
 const villageStore = useVillageStore()
@@ -279,7 +291,7 @@ const canvasEl     = ref(null)
 const worldId      = parseInt(route.query.world)
 
 const {
-  init, destroy, moveTo, applyVillageUpdate,
+  init, destroy, moveTo, applyVillageUpdate, setCommands,
   centerX, centerY, continent, loading, tooltip, clickedVillage,
 } = useMapCanvas(worldId)
 
@@ -292,7 +304,6 @@ watch(clickedVillage, (val) => {
   if (val) popupOpacity.value = 1
 })
 
-// ── icons_context.png: 24×24px, 15 colunas, linha 0=normal linha 1=hover ─
 const CTX_ICONS = {
   recursos: 0, atacar: 1, reservar: 2, favoritar: 3,
   relatorio: 4, perfil: 5, info_aldeia: 6,
@@ -343,8 +354,6 @@ const ALL_UNITS = [...INFANTRY, ...CAVALRY, ...SIEGE, ...OTHER]
 async function openAttackPanel(type) {
   if (!clickedVillage.value) return
 
-  // ✅ CORRIGIDO: salva os dados ANTES de nullar clickedVillage
-  // evita crash no render que ainda tenta acessar os dados antigos
   const village = { ...clickedVillage.value.village }
   attackTarget.value   = village
   clickedVillage.value = null
@@ -355,7 +364,6 @@ async function openAttackPanel(type) {
   for (const k of ALL_UNITS) sendUnits[k] = 0
 
   try {
-    // ✅ CORRIGIDO: passa worldId como query param (exigido pelo worldMiddleware)
     const { data } = await axios.get(`${API}/barracks`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
       params:  { worldId },
@@ -373,6 +381,7 @@ function calcDistance() {
   return Math.sqrt(dx * dx + dy * dy).toFixed(2)
 }
 
+// ── CORRIGIDO: agora chama /api/map/:worldId/attack com targetVillageId ──
 async function sendOrder(type) {
   apError.value   = ''
   apSuccess.value = ''
@@ -387,13 +396,24 @@ async function sendOrder(type) {
     return
   }
 
+  if (!attackTarget.value?.id) {
+    apError.value = 'Alvo inválido.'
+    return
+  }
+
   try {
     await axios.post(
-      `${API}/worlds/${worldId}/map/attack`,
-      { targetVillageId: attackTarget.value.id, units, type },
+      `${API}/map/${worldId}/attack`,
+      {
+        targetVillageId: attackTarget.value.id,
+        units,
+        type,
+      },
       { headers: { Authorization: `Bearer ${authStore.token}` } }
     )
     apSuccess.value = type === 'attack' ? 'Ataque enviado!' : 'Apoio enviado!'
+    // Atualiza o overlay de comandos no mapa
+    await fetchMapCommands(API, worldId, authStore.token, setCommands)
     setTimeout(() => { attackPanel.value = null }, 1200)
   } catch (e) {
     apError.value = e.response?.data?.error ?? 'Erro ao enviar.'
@@ -413,7 +433,7 @@ async function onSearch() {
   searchTimer = setTimeout(async () => {
     searching.value = true
     try {
-      const { data } = await axios.get(`${API}/worlds/${worldId}/map/search`, {
+      const { data } = await axios.get(`${API}/map/${worldId}/search`, {
         headers: { Authorization: `Bearer ${authStore.token}` },
         params:  { q: searchQuery.value },
       })
@@ -456,12 +476,18 @@ onMounted(async () => {
 
   init(canvasEl.value, coords?.x, coords?.y)
 
+  // Carrega comandos ativos para overlay e atualiza a cada 10s
+  await fetchMapCommands(API, worldId, authStore.token, setCommands)
+  commandsInterval = setInterval(
+    () => fetchMapCommands(API, worldId, authStore.token, setCommands),
+    10_000
+  )
+
   if (worldId) {
     mapStore.setCurrentWorld(worldId)
     joinWorld(worldId)
   }
 
-  // Fade-out do popup ao arrastar o mapa
   watch([centerX, centerY], () => {
     if (clickedVillage.value) {
       popupOpacity.value = 0
@@ -469,9 +495,13 @@ onMounted(async () => {
     }
   })
 })
+
+let commandsInterval = null
+
 onUnmounted(() => {
   destroy(canvasEl.value)
   if (worldId) leaveWorld(worldId)
+  clearInterval(commandsInterval)
 })
 </script>
 
@@ -559,7 +589,6 @@ onUnmounted(() => {
   image-rendering: crisp-edges;
 }
 
-/* ── Hover tip ── */
 .map-hover-tip {
   position: fixed;
   background: rgba(20,14,6,0.90);
@@ -574,7 +603,6 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* ── Context popup ── */
 .map-ctx-popup {
   position: fixed;
   z-index: 9999;
@@ -676,9 +704,7 @@ onUnmounted(() => {
   object-fit: contain;
 }
 
-.ap-unit-gray {
-  filter: grayscale(100%) opacity(0.35);
-}
+.ap-unit-gray { filter: grayscale(100%) opacity(0.35); }
 
 .ap-unit-input-wrap {
   display: flex;

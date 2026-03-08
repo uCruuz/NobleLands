@@ -32,7 +32,12 @@
             <!-- Linha principal -->
             <tr class="building-row queue-row">
               <td class="col-building">
-                <img :src="getBuildingThumb(job.buildingKey)" class="building-thumb" alt="" />
+                <img
+                  :src="getBuildingThumb(job.buildingKey)"
+                  class="building-thumb"
+                  :class="`building-thumb--${job.buildingKey}`"
+                  alt=""
+                />
                 <div class="building-info">
                   <a href="#" class="building-link" @click.prevent="goToBuilding(job.buildingKey)">
                     {{ BUILDING_CONFIGS[job.buildingKey]?.name }}
@@ -72,7 +77,12 @@
           <tr v-for="b in availableBuildings" :key="b.key" class="building-row">
             <!-- Ícone + Nome -->
             <td class="col-building">
-              <img :src="getBuildingThumb(b.key)" class="building-thumb" alt="" />
+              <img
+                :src="getBuildingThumb(b.key)"
+                class="building-thumb"
+                :class="`building-thumb--${b.key}`"
+                alt=""
+              />
               <div class="building-info">
                 <a href="#" class="building-link" @click.prevent="goToBuilding(b.key)">
                   {{ b.config.name }}
@@ -164,7 +174,12 @@
         <tbody>
           <tr v-for="b in lockedBuildings" :key="b.key" class="building-row building-row--locked">
             <td class="col-building">
-              <img :src="getBuildingThumb(b.key)" class="building-thumb building-thumb--locked" alt="" />
+              <img
+                :src="getBuildingThumb(b.key)"
+                class="building-thumb building-thumb--locked"
+                :class="`building-thumb--${b.key}`"
+                alt=""
+              />
               <div class="building-info">
                 <span class="building-link--locked">{{ b.config.name }}</span>
               </div>
@@ -389,8 +404,7 @@ onUnmounted(() => clearInterval(tickInterval))
 }
 .main-header-img {
   width: 120px;
-  height: 120px;
-  object-fit: contain;
+  height: 100px;
   flex-shrink: 0;
 }
 .main-header-info { flex: 1; }
@@ -501,12 +515,20 @@ onUnmounted(() => clearInterval(tickInterval))
 }
 .building-thumb {
   width: 35px;
-  height: 35px;
-  object-fit: contain;
+  height: 20px;
+  min-width: 35px;
+  min-height: 30px;
   display: block;
   flex-shrink: 0;
 }
 .building-thumb--locked { filter: grayscale(1) opacity(0.5); }
+
+/* ── Tamanhos individuais por edifício ── */
+/* Ajuste aqui o tamanho da estátua sem afetar os outros */
+.building-thumb--statue {
+  width: 35px;
+  height: 45px;
+}
 
 .building-info {
   display: flex;

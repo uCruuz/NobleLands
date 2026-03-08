@@ -47,7 +47,7 @@ async function getWorldConfig(worldId) {
 
 /**
  * Processa comandos que já chegaram ou já retornaram.
- * Chamado antes de qualquer GET para manter o estado atualizado.
+ * Chamado apenas no GET para manter o estado atualizado.
  *
  * - traveling + arrives_at_ms <= now → gera relatório de visita, muda para 'returning'
  * - returning + returns_at_ms <= now → devolve tropas, muda para 'done'
@@ -58,21 +58,21 @@ async function processCommands(villageId, worldId) {
 
   // ── 1. Ataques chegando ──────────────────────────────────────────────────
   const { rows: arriving } = await db.query(
-    `SELECT * FROM commands
-     WHERE origin_village_id = $1
-       AND status = 'traveling'
-       AND arrives_at_ms <= $2`,
-    [villageId, now]
-  )
+  `SELECT * FROM commands
+   WHERE origin_village_id = $1
+     AND status = 'traveling'
+     AND arrives_at_ms::bigint <= $2`,
+  [villageId, now]
+)
 
   for (const cmd of arriving) {
     const client = await db.connect()
     try {
       await client.query('BEGIN')
 
-      // ── Gera relatório de visita ─────────────────────────────────────────
+      // ── Busca dados de origem e destino ──────────────────────────────────
       const { rows: originRows } = await client.query(
-        `SELECT v.name, v.x, v.y, u.username AS player_name
+        `SELECT v.name, v.x, v.y, v.user_id, u.username AS player_name
          FROM villages v LEFT JOIN users u ON u.id = v.user_id
          WHERE v.id = $1`, [cmd.origin_village_id]
       )
@@ -85,26 +85,32 @@ async function processCommands(villageId, worldId) {
       const origin = originRows[0]
       const target = targetRows[0]
 
+      if (!origin) {
+        console.error('[processCommands] origem não encontrada para cmd:', cmd.id)
+        await client.query('ROLLBACK')
+        continue
+      }
+
       const reportData = {
         attacker: {
-          villageName: origin?.name  ?? '?',
-          playerName:  origin?.player_name ?? 'Bárbaro',
-          coords:      { x: origin?.x, y: origin?.y },
+          villageName: origin.name,
+          playerName:  origin.player_name ?? 'Bárbaro',
+          coords:      { x: origin.x, y: origin.y },
         },
         defender: {
-          villageName: target?.name  ?? '?',
+          villageName: target?.name ?? '?',
           playerName:  target?.player_name ?? 'Bárbaro',
           coords:      { x: target?.x, y: target?.y },
         },
         troopsSent:  cmd.troops,
-        troopsLost:  {},   // sem combate por enquanto
+        troopsLost:  {},
         loot:        { wood: 0, stone: 0, iron: 0 },
         travelMs:    cmd.arrives_at_ms - cmd.sent_at_ms,
       }
 
       const subject = `Visita em ${target?.name ?? '?'} (${target?.x ?? '?'}|${target?.y ?? '?'})`
 
-      // Insere relatório para o atacante
+      // ── Insere relatório usando owner_id já resolvido acima ──────────────
       const { rows: repRows } = await client.query(
         `INSERT INTO reports
            (world_id, owner_id, attacker_village_id, defender_village_id,
@@ -113,8 +119,7 @@ async function processCommands(villageId, worldId) {
          RETURNING id`,
         [
           worldId,
-          // owner_id: descobrir via villages.user_id
-          (await client.query('SELECT user_id FROM villages WHERE id = $1', [cmd.origin_village_id])).rows[0]?.user_id,
+          origin.user_id,   // ← resolvido diretamente do JOIN acima, sem subquery
           cmd.origin_village_id,
           cmd.target_village_id,
           subject,
@@ -124,7 +129,7 @@ async function processCommands(villageId, worldId) {
       )
       const reportId = repRows[0]?.id ?? null
 
-      // Muda status para 'returning'
+      // ── Muda status para 'returning' ─────────────────────────────────────
       await client.query(
         `UPDATE commands
          SET status = 'returning', report_id = $1
@@ -135,7 +140,7 @@ async function processCommands(villageId, worldId) {
       await client.query('COMMIT')
     } catch (e) {
       await client.query('ROLLBACK')
-      console.error('[processCommands] Erro ao processar chegada:', e)
+      console.error('[processCommands] Erro ao processar chegada do cmd:', cmd.id, e)
     } finally {
       client.release()
     }
@@ -143,19 +148,18 @@ async function processCommands(villageId, worldId) {
 
   // ── 2. Tropas retornando ─────────────────────────────────────────────────
   const { rows: returning } = await db.query(
-    `SELECT * FROM commands
-     WHERE origin_village_id = $1
-       AND status = 'returning'
-       AND returns_at_ms <= $2`,
-    [villageId, now]
-  )
+  `SELECT * FROM commands
+   WHERE origin_village_id = $1
+     AND status = 'returning'
+     AND returns_at_ms::bigint <= $2`,
+  [villageId, now]
+)
 
   for (const cmd of returning) {
     const client = await db.connect()
     try {
       await client.query('BEGIN')
 
-      // Devolve tropas para a aldeia de origem
       const troops = cmd.troops
       for (const [unitKey, qty] of Object.entries(troops)) {
         if (!qty || qty <= 0) continue
@@ -173,9 +177,10 @@ async function processCommands(villageId, worldId) {
       )
 
       await client.query('COMMIT')
+      console.log('[processCommands] tropas devolvidas para cmd:', cmd.id)
     } catch (e) {
       await client.query('ROLLBACK')
-      console.error('[processCommands] Erro ao devolver tropas:', e)
+      console.error('[processCommands] Erro ao devolver tropas do cmd:', cmd.id, e)
     } finally {
       client.release()
     }
@@ -183,7 +188,6 @@ async function processCommands(villageId, worldId) {
 }
 
 // ── GET /api/commands?worldId=X ───────────────────────────────────────────
-// Retorna comandos saindo e voltando da aldeia do jogador.
 router.get('/', async (req, res) => {
   try {
     const village = await getUserVillage(req.user.id, req.worldId)
@@ -249,7 +253,6 @@ router.post('/attack', async (req, res) => {
   try {
     const { troops, targetX, targetY } = req.body
 
-    // ── Validações básicas ───────────────────────────────────────────────
     if (!troops || typeof troops !== 'object') {
       return res.status(400).json({ error: 'Tropas inválidas.' })
     }
@@ -263,7 +266,6 @@ router.post('/attack', async (req, res) => {
       return res.status(400).json({ error: 'Coordenadas inválidas.' })
     }
 
-    // Verifica se há ao menos uma unidade
     const hasTroops = Object.values(troops).some(q => q > 0)
     if (!hasTroops) {
       return res.status(400).json({ error: 'Selecione ao menos uma unidade.' })
@@ -272,14 +274,12 @@ router.post('/attack', async (req, res) => {
     const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
-    // Não pode atacar a si mesmo
     if (village.x === tx && village.y === ty) {
       return res.status(400).json({ error: 'Você não pode atacar sua própria aldeia.' })
     }
 
     const db = await getDb()
 
-    // ── Busca aldeia alvo ────────────────────────────────────────────────
     const { rows: targetRows } = await db.query(
       'SELECT * FROM villages WHERE world_id = $1 AND x = $2 AND y = $3',
       [req.worldId, tx, ty]
@@ -289,7 +289,6 @@ router.post('/attack', async (req, res) => {
       return res.status(404).json({ error: 'Aldeia alvo não encontrada nessas coordenadas.' })
     }
 
-    // ── Valida unidades e calcula viagem ─────────────────────────────────
     const cleanTroops = {}
     for (const [key, qty] of Object.entries(troops)) {
       const q = parseInt(qty, 10)
@@ -302,7 +301,6 @@ router.post('/attack', async (req, res) => {
       return res.status(400).json({ error: 'Nenhuma unidade válida selecionada.' })
     }
 
-    // Speed da unidade mais lenta
     const speed = slowestSpeed(cleanTroops)
     if (speed === 0) {
       return res.status(400).json({ error: 'Nenhuma das unidades enviadas possui velocidade.' })
@@ -320,13 +318,12 @@ router.post('/attack', async (req, res) => {
     )
 
     // ── Transação: desconta tropas e insere comando ──────────────────────
+    // IMPORTANTE: processCommands NÃO é chamado aqui para evitar
+    // deadlock/conflito de conexões dentro da transação.
     const client = await db.connect()
     let commandId
     try {
       await client.query('BEGIN')
-
-      // Processa filas pendentes antes de ler estoque
-      await processCommands(village.id, req.worldId)
 
       // Lê estoque atual com lock
       const { rows: unitRows } = await client.query(
@@ -373,6 +370,7 @@ router.post('/attack', async (req, res) => {
       commandId = cmdRows[0].id
 
       await client.query('COMMIT')
+      console.log('[attack] commandId inserido:', commandId)
     } catch (e) {
       await client.query('ROLLBACK')
       throw e
@@ -380,7 +378,6 @@ router.post('/attack', async (req, res) => {
       client.release()
     }
 
-    // Emite evento socket para o jogador atualizar a UI
     const io = req.app.locals.io
     if (io) {
       io.to(`player:${req.user.id}`).emit('command:new', {
@@ -405,8 +402,6 @@ router.post('/attack', async (req, res) => {
 })
 
 // ── POST /api/commands/cancel?worldId=X ──────────────────────────────────
-// Só pode cancelar ataques com status = 'traveling' (ainda não chegaram).
-// O retorno é proporcional à fração já percorrida.
 router.post('/cancel', async (req, res) => {
   try {
     const { commandId } = req.body
@@ -426,7 +421,7 @@ router.post('/cancel', async (req, res) => {
       return res.status(400).json({ error: 'Só é possível cancelar ataques ainda em trânsito.' })
     }
 
-    const now         = Date.now()
+    const now          = Date.now()
     const newReturnsAt = calcCancelReturnTime(
       Number(cmd.sent_at_ms),
       Number(cmd.arrives_at_ms),

@@ -26,7 +26,6 @@
           <div v-show="!mapCollapsed" class="map-scene-wrapper">
             <div class="map-scene" :style="{ backgroundImage: `url('/back_none.png')` }">
 
-              <!-- Edifícios posicionados sobre o mapa -->
               <template v-for="b in buildingSpots" :key="b.key">
                 <div
                   v-if="village.buildings[b.key] !== undefined && (village.buildings[b.key] > 0 || getBuildingImage(b.key))"
@@ -62,7 +61,6 @@
                 </div>
               </template>
 
-              <!-- Animações de produção -->
               <template v-for="anim in animSpots" :key="'anim-' + anim.animKey">
                 <div
                   v-if="getBuildingAnim(anim.animKey)"
@@ -85,7 +83,6 @@
         <!-- ── Painel direito ── -->
         <div class="side-panel">
 
-          <!-- Produção -->
           <div class="side-box">
             <div class="side-box-header">
               <span>Produção</span>
@@ -110,7 +107,6 @@
             </div>
           </div>
 
-          <!-- Fila de construção -->
           <div v-if="villageStore.currentBuild" class="side-box">
             <div class="side-box-header">
               <span>Em construção</span>
@@ -124,7 +120,6 @@
             </div>
           </div>
 
-          <!-- Unidades -->
           <div class="side-box">
             <div class="side-box-header">
               <span>Unidades</span>
@@ -146,7 +141,6 @@
             </div>
           </div>
 
-          <!-- Efeitos ativos -->
           <div class="side-box">
             <div class="side-box-header">
               <span>Efeitos ativos</span>
@@ -158,6 +152,78 @@
           </div>
 
         </div>
+      </div>
+
+      <!-- ── Comandos ativos ── -->
+      <div class="commands-section">
+        <div class="commands-header">
+          <span>Movimentos de tropas</span>
+          <span v-if="commandsLoading" class="commands-loading">carregando...</span>
+        </div>
+
+        <div v-if="!commandsLoading && !activeCommands.length" class="commands-empty">
+          Nenhum movimento de tropas em andamento.
+        </div>
+
+        <table v-else-if="activeCommands.length" class="commands-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Status</th>
+              <th>Tempo restante</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="cmd in activeCommands"
+              :key="cmd.id"
+              class="command-row"
+              :class="`command-row--${cmd.type}`"
+            >
+              <!-- Tipo -->
+              <td class="cmd-col-type">
+                <span class="cmd-badge" :class="`cmd-badge--${cmd.type}`">
+                  {{ cmd.type === 'attack' ? '⚔ Ataque' : '🛡 Apoio' }}
+                </span>
+                <span v-if="cmd.cancelled" class="cmd-cancelled">(cancelado)</span>
+              </td>
+
+              <!-- Origem -->
+              <td class="cmd-col-village">
+                <span class="cmd-village-name">{{ cmd.origin.name }}</span>
+                <span class="cmd-coords">({{ cmd.origin.x }}|{{ cmd.origin.y }})</span>
+              </td>
+
+              <!-- Destino -->
+              <td class="cmd-col-village">
+                <span class="cmd-village-name">{{ cmd.target.name }}</span>
+                <span class="cmd-coords">({{ cmd.target.x }}|{{ cmd.target.y }})</span>
+                <span class="cmd-player">{{ cmd.target.playerName }}</span>
+              </td>
+
+              <!-- Status -->
+              <td class="cmd-col-status">
+                <span class="cmd-status" :class="`cmd-status--${cmd.status}`">
+                  {{ cmd.status === 'traveling' ? '➜ Indo' : '↩ Voltando' }}
+                </span>
+              </td>
+
+              <!-- Tempo restante + barra -->
+              <td class="cmd-col-timer">
+                <span class="cmd-timer">{{ formatCommandTime(cmd) }}</span>
+                <div class="cmd-progress-bar">
+                  <div
+                    class="cmd-progress-fill"
+                    :class="`cmd-progress-fill--${cmd.type}`"
+                    :style="{ width: getCommandProgress(cmd) + '%' }"
+                  ></div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- ── Modal de erro de imagem ── -->
@@ -185,11 +251,14 @@
 import { useRoute } from 'vue-router'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 import GameLayout from '../components/GameLayout.vue'
 import { useVillageStore } from '../stores/village.js'
 import { useAuthStore } from '../stores/auth.js'
 import { useIcons } from '../composables/useIcons.js'
 import { BUILDING_CONFIGS, formatBuildTime } from '../../../shared/buildings.js'
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 
 const route         = useRoute()
 const router        = useRouter()
@@ -205,6 +274,49 @@ const ironProduction  = computed(() => villageStore.ironProduction)
 const mapCollapsed  = ref(false)
 const notifications = ref([])
 
+// ── Comandos ativos ───────────────────────────────────────────────────────
+const activeCommands  = ref([])
+const commandsLoading = ref(false)
+const now             = ref(Date.now())
+
+async function fetchCommands() {
+  if (!authStore.token || !villageStore.worldId) return
+  commandsLoading.value = true
+  try {
+    const { data } = await axios.get(`${API}/commands`, {
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params:  { worldId: villageStore.worldId },
+    })
+    activeCommands.value = data.commands ?? []
+    // Sincroniza o now com o servidor para evitar drift
+    if (data.serverTime) now.value = data.serverTime
+  } catch (e) {
+    console.error('[VillageView] Erro ao carregar comandos:', e)
+  } finally {
+    commandsLoading.value = false
+  }
+}
+
+function formatCommandTime(cmd) {
+  const target = cmd.status === 'traveling' ? cmd.arrivesAtMs : cmd.returnsAtMs
+  const diff   = Math.max(0, Math.floor((target - now.value) / 1000))
+  return formatBuildTime(diff)
+}
+
+function getCommandProgress(cmd) {
+  if (cmd.status === 'traveling') {
+    const total   = cmd.arrivesAtMs - cmd.sentAtMs
+    const elapsed = now.value - cmd.sentAtMs
+    return Math.min(100, Math.max(0, (elapsed / total) * 100))
+  } else {
+    // returning: progresso de volta (de arrivesAt até returnsAt)
+    const total   = cmd.returnsAtMs - cmd.arrivesAtMs
+    const elapsed = now.value - cmd.arrivesAtMs
+    return Math.min(100, Math.max(0, (elapsed / total) * 100))
+  }
+}
+
+// ── Building configs (mantidos do original) ───────────────────────────────
 const BUILDING_IMAGE_CONFIG = {
   main:     { imgKey: 'main',     hasLevel0: false, tiers: 3 },
   barracks: { imgKey: 'barracks', hasLevel0: true,  tiers: 3 },
@@ -324,13 +436,15 @@ const unitList = [
   { key: 'snob',     name: 'Nobre',            img: 'unit_snob.webp',     count: 0 },
 ]
 
-let tickInterval = null
-let lastTick = Date.now()
+let tickInterval    = null
+let commandInterval = null
+let lastTick        = Date.now()
 
 function tick() {
-  const now   = Date.now()
-  const delta = (now - lastTick) / 1000
-  lastTick    = now
+  const n     = Date.now()
+  const delta = (n - lastTick) / 1000
+  lastTick    = n
+  now.value   = n
   villageStore.processBuildQueue()
   villageStore.updateResources(delta)
 }
@@ -340,13 +454,21 @@ function formatTimeLeft(endsAt) {
   return formatBuildTime(diff)
 }
 
-onMounted(() => {
+onMounted(async () => {
   const worldId = parseInt(route.query.world)
   if (authStore.user && worldId) villageStore.init(worldId)
+
   tickInterval = setInterval(tick, 1000)
+
+  // Carrega comandos imediatamente e depois a cada 10s
+  await fetchCommands()
+  commandInterval = setInterval(fetchCommands, 10_000)
 })
 
-onUnmounted(() => clearInterval(tickInterval))
+onUnmounted(() => {
+  clearInterval(tickInterval)
+  clearInterval(commandInterval)
+})
 </script>
 
 <style scoped>
@@ -421,7 +543,6 @@ onUnmounted(() => clearInterval(tickInterval))
   padding: 0;
 }
 
-/* ── Cena do mapa ── */
 .map-scene-wrapper { overflow: hidden; }
 .map-scene {
   position: relative;
@@ -433,7 +554,6 @@ onUnmounted(() => clearInterval(tickInterval))
   user-select: none;
 }
 
-/* ── Edifícios ── */
 .building-spot {
   position: absolute;
   cursor: pointer;
@@ -462,7 +582,6 @@ onUnmounted(() => clearInterval(tickInterval))
   pointer-events: none;
 }
 
-/* ── Animações ── */
 @keyframes sprite-play {
   from { background-position-x: 0%; }
   to   { background-position-x: 100%; }
@@ -496,7 +615,6 @@ onUnmounted(() => clearInterval(tickInterval))
   pointer-events: none;
 }
 
-/* ── Botão de erro ── */
 .img-error-btn {
   display: none;
   position: absolute;
@@ -512,6 +630,249 @@ onUnmounted(() => clearInterval(tickInterval))
 }
 [data-img-error] .img-error-btn { display: flex; align-items: center; justify-content: center; }
 [data-img-error] .building-img  { display: none !important; }
+
+/* ── Painel direito ── */
+.side-panel {
+  width: 185px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.side-box {
+  border: 1px solid #8b6535;
+  background: #f0e0b0;
+}
+.side-box-header {
+  background: #c8a460;
+  border-bottom: 1px solid #8b6535;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: bold;
+  font-style: italic;
+  color: #3b2200;
+}
+.side-box-collapse {
+  background: none;
+  border: none;
+  color: #3b2200;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+.side-box-body {
+  padding: 6px 8px;
+  font-size: 11px;
+  color: #3b2200;
+}
+.side-box-empty { color: #7a6040; font-style: italic; }
+.empty-msg { font-size: 11px; }
+
+.prod-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 0;
+}
+.prod-row span { flex: 1; }
+.prod-row strong { font-size: 11px; }
+
+.queue-row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 0;
+  border-bottom: 1px solid #c8a878;
+  font-size: 11px;
+}
+.queue-row:last-child { border-bottom: none; }
+.queue-level { color: #5a3a00; }
+.queue-timer { color: #8b4513; font-weight: bold; }
+
+.units-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #3b2200;
+}
+.unit-nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #8b4513;
+  font-size: 13px;
+  padding: 0;
+}
+.units-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-bottom: 6px;
+}
+.unit-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 30px;
+}
+.unit-icon {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+.unit-count { font-size: 10px; color: #3b2200; }
+.recrutar-link {
+  display: block;
+  font-size: 11px;
+  color: #8b4513;
+  font-weight: bold;
+  text-decoration: none;
+}
+.recrutar-link:hover { text-decoration: underline; }
+
+/* ── Comandos ativos ── */
+.commands-section {
+  border: 1px solid #8b6535;
+  background: #f0e0b0;
+  font-family: Verdana, Arial, sans-serif;
+  font-size: 11px;
+}
+
+.commands-header {
+  background: #c8a460;
+  border-bottom: 1px solid #8b6535;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: bold;
+  font-style: italic;
+  color: #3b2200;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.commands-loading {
+  font-size: 10px;
+  font-weight: normal;
+  font-style: normal;
+  color: #7a6040;
+}
+
+.commands-empty {
+  padding: 10px 12px;
+  color: #7a6040;
+  font-style: italic;
+  font-size: 11px;
+}
+
+.commands-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 11px;
+  background: #ecd8aa;
+}
+
+.commands-table thead th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 10pt;
+  background-color: #c1a264;
+  background-image: url('/tableheader_bg3.webp');
+  background-repeat: repeat-x;
+  padding: 4px 8px;
+  white-space: nowrap;
+  color: #000;
+}
+
+.command-row td {
+  background: #f4e4bc;
+  vertical-align: middle;
+  padding: 5px 8px;
+}
+.command-row:nth-child(even) td { background: #eeddb8; }
+
+/* Badge de tipo */
+.cmd-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.cmd-badge--attack  { background: #8b1a1a; color: #fff; }
+.cmd-badge--support { background: #2a5c10; color: #fff; }
+
+.cmd-cancelled {
+  display: block;
+  font-size: 10px;
+  color: #7a6040;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* Colunas */
+.cmd-col-type   { width: 100px; }
+.cmd-col-village {
+  white-space: nowrap;
+}
+.cmd-col-status { white-space: nowrap; }
+.cmd-col-timer  { min-width: 130px; }
+
+.cmd-village-name {
+  display: block;
+  font-weight: bold;
+  color: #3b2200;
+  font-size: 11px;
+}
+.cmd-coords {
+  display: block;
+  font-size: 10px;
+  color: #7a6040;
+}
+.cmd-player {
+  display: block;
+  font-size: 10px;
+  color: #8b4513;
+}
+
+.cmd-status {
+  font-size: 11px;
+  font-weight: bold;
+}
+.cmd-status--traveling { color: #8b1a1a; }
+.cmd-status--returning { color: #2a5c10; }
+
+.cmd-timer {
+  display: block;
+  font-weight: bold;
+  color: #3b2200;
+  font-size: 11px;
+  margin-bottom: 3px;
+}
+
+.cmd-progress-bar {
+  width: 100%;
+  height: 4px;
+  background: #c8a878;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.cmd-progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 1s linear;
+}
+.cmd-progress-fill--attack  { background: linear-gradient(to right, #8b1a1a, #cc3030); }
+.cmd-progress-fill--support { background: linear-gradient(to right, #2a5c10, #4a9c20); }
 
 /* ── Modal de erro ── */
 .error-modal-overlay {
@@ -575,116 +936,4 @@ onUnmounted(() => clearInterval(tickInterval))
   font-style: italic;
   font-size: 11px;
 }
-
-/* ── Painel direito ── */
-.side-panel {
-  width: 185px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.side-box {
-  border: 1px solid #8b6535;
-  background: #f0e0b0;
-}
-.side-box-header {
-  background: #c8a460;
-  border-bottom: 1px solid #8b6535;
-  padding: 3px 6px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 12px;
-  font-weight: bold;
-  font-style: italic;
-  color: #3b2200;
-}
-.side-box-collapse {
-  background: none;
-  border: none;
-  color: #3b2200;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 0;
-}
-.side-box-body {
-  padding: 6px 8px;
-  font-size: 11px;
-  color: #3b2200;
-}
-.side-box-empty { color: #7a6040; font-style: italic; }
-.empty-msg { font-size: 11px; }
-
-/* Produção */
-.prod-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 0;
-}
-.prod-row span { flex: 1; }
-.prod-row strong { font-size: 11px; }
-
-/* Fila */
-.queue-row {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 3px 0;
-  border-bottom: 1px solid #c8a878;
-  font-size: 11px;
-}
-.queue-row:last-child { border-bottom: none; }
-.queue-level { color: #5a3a00; }
-.queue-timer { color: #8b4513; font-weight: bold; }
-
-/* Unidades */
-.units-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 11px;
-  font-weight: bold;
-  color: #3b2200;
-}
-.unit-nav-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #8b4513;
-  font-size: 13px;
-  padding: 0;
-}
-.units-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  margin-bottom: 6px;
-}
-.unit-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 30px;
-}
-.unit-icon {
-  width: 25px;
-  height: 25px;
-  object-fit: contain;
-}
-.unit-count {
-  font-size: 10px;
-  color: #3b2200;
-}
-.recrutar-link {
-  display: block;
-  font-size: 11px;
-  color: #8b4513;
-  font-weight: bold;
-  text-decoration: none;
-}
-.recrutar-link:hover { text-decoration: underline; }
 </style>

@@ -13,6 +13,18 @@ import {
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 
+// ── Cache localStorage ─────────────────────────────────────────
+function cacheKey(worldId) { return `tl_village_${worldId}` }
+
+function saveCache(worldId, data) {
+  try { localStorage.setItem(cacheKey(worldId), JSON.stringify(data)) } catch {}
+}
+
+function loadCache(worldId) {
+  try { return JSON.parse(localStorage.getItem(cacheKey(worldId)) || 'null') } catch { return null }
+}
+// ──────────────────────────────────────────────────────────────
+
 function emptyVillage() {
   return {
     id: null,
@@ -65,10 +77,7 @@ export const useVillageStore = defineStore('village', {
 
   actions: {
     async fetchVillage() {
-      if (!this.worldId) {
-        console.warn('[VillageStore] worldId não definido, abortando fetchVillage.')
-        return
-      }
+      if (!this.worldId) return
       const auth = useAuthStore()
       this.loading = true
       try {
@@ -77,6 +86,7 @@ export const useVillageStore = defineStore('village', {
           params:  { worldId: this.worldId }
         })
         this._applyServerState(data)
+        saveCache(this.worldId, data) // ← salva cache após resposta do servidor
       } catch (e) {
         console.error('Erro ao carregar aldeia:', e)
       } finally {
@@ -168,11 +178,16 @@ export const useVillageStore = defineStore('village', {
       }
     },
 
-    // Deve ser chamado com worldId ANTES de init()
     async init(worldId) {
       if (worldId) this.worldId = worldId
-      // Já tem dados carregados para este mundo — não refaz o fetch
-      if (this.village.id && this.worldId === worldId) return
+
+      // ── Carrega cache imediatamente para evitar tela vazia ──
+      const cached = loadCache(this.worldId)
+      if (cached) {
+        this._applyServerState(cached)
+      }
+
+      // ── Busca servidor em background (atualiza silenciosamente) ──
       await this.fetchVillage()
     },
 

@@ -286,7 +286,8 @@ async function recruit(unitKey) {
 
   try {
     await axios.post(`${API}/barracks/train`, { unitKey, count: qty }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     recruitAmounts[unitKey] = 0
     await fetchBarracks()

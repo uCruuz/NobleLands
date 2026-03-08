@@ -14,14 +14,13 @@ import smithRoutes    from './routes/smith.js'
 import worldsRoutes   from './routes/worlds.js'
 import mapRoutes      from './routes/map.js'
 import commandsRoutes from './routes/commands.js'
+import reportsRoutes  from './routes/reports.js'
 
 const app    = express()
 const server = http.createServer(app)
 
-// Necessário para pegar o IP real do jogador atrás de proxies (Heroku, Nginx, etc.)
 app.set('trust proxy', 1)
 
-// Origens permitidas — ajuste conforme seu ambiente
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',')
   .map(o => o.trim())
@@ -35,12 +34,10 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 9999
 
-// ── Segurança ──────────────────────────────────────────────────────────────
 app.use(helmet())
 app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }))
 app.use(express.json())
 
-// Rate limiting geral — 200 req/min por IP
 app.use(rateLimit({
   windowMs: 60_000,
   max: 200,
@@ -49,7 +46,6 @@ app.use(rateLimit({
   message: { error: 'Muitas requisições. Tente novamente em breve.' }
 }))
 
-// Rate limiting estrito para autenticação — 10 tentativas/min por IP
 const authLimiter = rateLimit({
   windowMs: 60_000,
   max: 10,
@@ -58,10 +54,8 @@ const authLimiter = rateLimit({
   message: { error: 'Muitas tentativas de login. Aguarde 1 minuto.' }
 })
 
-// Disponibiliza io para as rotas via app.locals
 app.locals.io = io
 
-// ── Rotas ──────────────────────────────────────────────────────────────────
 app.use('/api/auth',     authLimiter, authRoutes)
 app.use('/api/village',  villageRoutes)
 app.use('/api/barracks', barracksRoutes)
@@ -69,18 +63,16 @@ app.use('/api/smith',    smithRoutes)
 app.use('/api/worlds',   worldsRoutes)
 app.use('/api/map',      mapRoutes)
 app.use('/api/commands', commandsRoutes)
+app.use('/api/reports',  reportsRoutes)
 
-// ── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ ok: true }))
 
-// ── Middleware global de erros ─────────────────────────────────────────────
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
   console.error('[Erro não tratado]', err)
   res.status(500).json({ error: 'Erro interno do servidor.' })
 })
 
-// ── Inicialização ──────────────────────────────────────────────────────────
 runMigrations()
   .then(() => {
     setupSocket(io)
@@ -93,8 +85,6 @@ runMigrations()
     process.exit(1)
   })
 
-// ── Encerramento gracioso ──────────────────────────────────────────────────
-// Aguarda conexões pendentes fecharem antes de matar o processo
 process.on('SIGTERM', () => {
   console.log('[Server] SIGTERM recebido. Encerrando conexões pendentes...')
   server.close(() => {
