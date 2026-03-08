@@ -149,11 +149,12 @@
               <div class="ap-units-area">
                 <div class="ap-col">
                   <div class="ap-col-title">Infantaria</div>
+                  <!-- ✅ CORRIGIDO: optional chaining em UNIT_CONFIGS[key] -->
                   <div v-for="key in INFANTRY" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key]?.img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
-                           :title="UNIT_CONFIGS[key].name" />
+                           :title="UNIT_CONFIGS[key]?.name" />
                     </div>
                     <div class="ap-unit-input-wrap">
                       <input v-model.number="sendUnits[key]" type="number" min="0"
@@ -168,9 +169,9 @@
                   <div class="ap-col-title">Cavalaria</div>
                   <div v-for="key in CAVALRY" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key]?.img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
-                           :title="UNIT_CONFIGS[key].name" />
+                           :title="UNIT_CONFIGS[key]?.name" />
                     </div>
                     <div class="ap-unit-input-wrap">
                       <input v-model.number="sendUnits[key]" type="number" min="0"
@@ -185,9 +186,9 @@
                   <div class="ap-col-title">Armas de cerco</div>
                   <div v-for="key in SIEGE" :key="key" class="ap-unit-row">
                     <div class="ap-unit-icon-wrap">
-                      <img :src="`/units/${UNIT_CONFIGS[key].img}`"
+                      <img :src="`/units/${UNIT_CONFIGS[key]?.img}`"
                            :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
-                           :title="UNIT_CONFIGS[key].name" />
+                           :title="UNIT_CONFIGS[key]?.name" />
                     </div>
                     <div class="ap-unit-input-wrap">
                       <input v-model.number="sendUnits[key]" type="number" min="0"
@@ -198,30 +199,30 @@
                   </div>
                 </div>
 
-  <div class="ap-col">
-    <div class="ap-col-title">Outros</div>
-    <div v-for="key in OTHER" :key="key" class="ap-unit-row">
-      <div class="ap-unit-icon-wrap">
-        <img :src="`/units/${UNIT_CONFIGS[key].img}`"
-             :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
-             :title="UNIT_CONFIGS[key].name" />
-      </div>
-      <div class="ap-unit-input-wrap">
-        <input v-model.number="sendUnits[key]" type="number" min="0"
-               :max="myUnits[key] ?? 0" class="ap-input"
-               :disabled="!myUnits[key]" />
-        <div class="ap-unit-count">({{ myUnits[key] ?? 0 }})</div>
-      </div>
-    </div>
-  </div>
+                <div class="ap-col">
+                  <div class="ap-col-title">Outros</div>
+                  <div v-for="key in OTHER" :key="key" class="ap-unit-row">
+                    <div class="ap-unit-icon-wrap">
+                      <img :src="`/units/${UNIT_CONFIGS[key]?.img}`"
+                           :class="['ap-unit-img', { 'ap-unit-gray': !myUnits[key] }]"
+                           :title="UNIT_CONFIGS[key]?.name" />
+                    </div>
+                    <div class="ap-unit-input-wrap">
+                      <input v-model.number="sendUnits[key]" type="number" min="0"
+                             :max="myUnits[key] ?? 0" class="ap-input"
+                             :disabled="!myUnits[key]" />
+                      <div class="ap-unit-count">({{ myUnits[key] ?? 0 }})</div>
+                    </div>
+                  </div>
+                </div>
 
-  <div class="ap-col ap-col-models">
-    <div class="ap-col-title">Modelos de tropas</div>
-    <div class="ap-model-row">Todas as tropas <span class="ap-info">ⓘ</span></div>
-    <div class="ap-model-row">Fake <span class="ap-info">ⓘ</span></div>
-    <div class="ap-model-row">Nobre <span class="ap-info">ⓘ</span></div>
-  </div>
-</div>
+                <div class="ap-col ap-col-models">
+                  <div class="ap-col-title">Modelos de tropas</div>
+                  <div class="ap-model-row">Todas as tropas <span class="ap-info">ⓘ</span></div>
+                  <div class="ap-model-row">Fake <span class="ap-info">ⓘ</span></div>
+                  <div class="ap-model-row">Nobre <span class="ap-info">ⓘ</span></div>
+                </div>
+              </div>
 
               <div class="ap-target-info" v-if="attackTarget">
                 <img src="/map/v1_left.png" class="ap-target-img" />
@@ -341,7 +342,11 @@ const ALL_UNITS = [...INFANTRY, ...CAVALRY, ...SIEGE, ...OTHER]
 
 async function openAttackPanel(type) {
   if (!clickedVillage.value) return
-  attackTarget.value   = clickedVillage.value.village
+
+  // ✅ CORRIGIDO: salva os dados ANTES de nullar clickedVillage
+  // evita crash no render que ainda tenta acessar os dados antigos
+  const village = { ...clickedVillage.value.village }
+  attackTarget.value   = village
   clickedVillage.value = null
   attackPanel.value    = type
   apError.value        = ''
@@ -350,8 +355,10 @@ async function openAttackPanel(type) {
   for (const k of ALL_UNITS) sendUnits[k] = 0
 
   try {
+    // ✅ CORRIGIDO: passa worldId como query param (exigido pelo worldMiddleware)
     const { data } = await axios.get(`${API}/barracks`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params:  { worldId },
     })
     for (const k of ALL_UNITS) myUnits[k] = data.units?.[k] ?? 0
   } catch {
@@ -455,7 +462,6 @@ onMounted(async () => {
   }
 
   // Fade-out do popup ao arrastar o mapa
-  // Observa centerX/centerY: qualquer movimento do mapa dispara o fade
   watch([centerX, centerY], () => {
     if (clickedVillage.value) {
       popupOpacity.value = 0

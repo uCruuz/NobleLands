@@ -89,7 +89,8 @@ async function fetchMiniVillages() {
   const x2 = Math.min(999, props.centerX + HALF)
   const y2 = Math.min(999, props.centerY + HALF)
   try {
-    const { data } = await axios.get(`${API}/worlds/${props.worldId}/map`, {
+    // ✅ CORRIGIDO: URL agora segue a estrutura correta de routes/map.js
+    const { data } = await axios.get(`${API}/map/${props.worldId}`, {
       headers: { Authorization: `Bearer ${authStore.token}` },
       params: { x1, y1, x2, y2 },
     })
