@@ -13,6 +13,7 @@ import barracksRoutes from './routes/barracks.js'
 import smithRoutes    from './routes/smith.js'
 import worldsRoutes   from './routes/worlds.js'
 import mapRoutes      from './routes/map.js'
+import commandsRoutes from './routes/commands.js'
 
 const app    = express()
 const server = http.createServer(app)
@@ -67,6 +68,7 @@ app.use('/api/barracks', barracksRoutes)
 app.use('/api/smith',    smithRoutes)
 app.use('/api/worlds',   worldsRoutes)
 app.use('/api/map',      mapRoutes)
+app.use('/api/commands', commandsRoutes)
 
 // ── Health check ───────────────────────────────────────────────────────────
 app.get('/api/health', (_, res) => res.json({ ok: true }))

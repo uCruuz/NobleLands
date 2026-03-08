@@ -133,6 +133,63 @@ export async function runMigrations() {
         unit_key   TEXT    NOT NULL,
         ends_at    INTEGER NOT NULL
       );
+
+      -- ── Relatórios ───────────────────────────────────────────────────────
+      -- Armazena todos os relatórios de batalha, visita, comércio, etc.
+      -- data_json contém o payload completo do evento (tropas, saque, etc.)
+      CREATE TABLE IF NOT EXISTS reports (
+        id            SERIAL  PRIMARY KEY,
+        world_id      INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+        -- Dono do relatório (quem o vê na caixa de relatórios)
+        owner_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        -- Aldeias envolvidas (podem ser NULL se aldeia foi deletada)
+        attacker_village_id INTEGER REFERENCES villages(id) ON DELETE SET NULL,
+        defender_village_id INTEGER REFERENCES villages(id) ON DELETE SET NULL,
+        type          TEXT    NOT NULL DEFAULT 'attack',
+        -- result: 'green' (sem perdas), 'yellow' (perdas parciais), 'red' (derrota), 'neutral'
+        result        TEXT    NOT NULL DEFAULT 'neutral',
+        subject       TEXT    NOT NULL,
+        read          BOOLEAN NOT NULL DEFAULT false,
+        data_json     JSONB   NOT NULL DEFAULT '{}',
+        created_at    INTEGER NOT NULL DEFAULT EXTRACT(EPOCH FROM NOW())::INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_reports_owner
+        ON reports (owner_id, world_id, created_at DESC);
+
+      -- ── Comandos (movimentação de tropas) ────────────────────────────────
+      -- Registra ataques e apoios em trânsito.
+      -- Timestamps em INTEGER (segundos Unix) para consistência com o resto do DB,
+      -- mas com precisão de ms armazenada em colunas _ms separadas para o timer de 200ms.
+      --
+      -- status:
+      --   'traveling'  → indo em direção ao alvo
+      --   'returning'  → voltando para a origem (ou cancelado antes de chegar)
+      --   'done'       → chegou, processado e devolvido
+      CREATE TABLE IF NOT EXISTS commands (
+        id                  SERIAL  PRIMARY KEY,
+        world_id            INTEGER NOT NULL REFERENCES worlds(id) ON DELETE CASCADE,
+        origin_village_id   INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
+        target_village_id   INTEGER NOT NULL REFERENCES villages(id) ON DELETE CASCADE,
+        type                TEXT    NOT NULL DEFAULT 'attack',
+        troops              JSONB   NOT NULL DEFAULT '{}',
+        -- ms-precision timestamps
+        sent_at_ms          BIGINT  NOT NULL,
+        arrives_at_ms       BIGINT  NOT NULL,
+        returns_at_ms       BIGINT  NOT NULL,
+        status              TEXT    NOT NULL DEFAULT 'traveling',
+        report_id           INTEGER REFERENCES reports(id) ON DELETE SET NULL,
+        cancelled           BOOLEAN NOT NULL DEFAULT false
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_commands_origin
+        ON commands (origin_village_id, status);
+      CREATE INDEX IF NOT EXISTS idx_commands_target
+        ON commands (target_village_id, status);
+      CREATE INDEX IF NOT EXISTS idx_commands_arrives
+        ON commands (arrives_at_ms) WHERE status = 'traveling';
+      CREATE INDEX IF NOT EXISTS idx_commands_returns
+        ON commands (returns_at_ms) WHERE status = 'returning';
     `)
     console.log('[DB] Migrations executadas com sucesso.')
   } finally {
