@@ -6,26 +6,23 @@
 //   Linha 1 (y=1 ):  índices  0– 9
 //   Linha 2 (y=20):  índices 10–19
 //   Linha 3 (y=39):  índices 20–29
-//   Linha 4 (y=58):  índices 30–38
-//   Especiais (y=77, canto dir): configuracoes=39, error=40
-
+//   Linha 4 (y=58):  índices 30–39
+//   Linha 5 (y=77):  índices 40–43
+//   Especiais (y=77, canto dir): configuracoes=49, error=50
 const STEP = 19   // 18px ícone + 1px gap
 const SIZE = 18   // tamanho visual do ícone
-
 function gridPos(index) {
-  // configuracoes (39) e error (40) ficam no canto inferior direito
+  // configuracoes (49) e error (50) ficam no canto inferior direito
   if (index === 49) return { x: 153, y: 77 }
   if (index === 50) return { x: 172, y: 77 }
-
   const col = index % 10
   const row = Math.floor(index / 10)
-  const rowOffsets = [1, 20, 39, 58]
+  const rowOffsets = [1, 20, 39, 58, 77]
   return {
     x: 1 + col * STEP,
     y: rowOffsets[row] ?? 1,
   }
 }
-
 // ── Mapa de nomes ────────────────────────────────────────────
 export const ICONS = {
   // Linha 1 (0–9)
@@ -39,7 +36,6 @@ export const ICONS = {
   seta_direita:         7,
   nova_mensagem:        8,
   sem_mensagem:         9,
-
   // Linha 2 (10–19)
   novo_relatorio:      10,
   sem_relatorio:       11,
@@ -51,7 +47,6 @@ export const ICONS = {
   bandeiras:           17,
   nova_bandeira:       18,
   relogio:             19,
-
   // Linha 3 (20–29)
   mapa1:               20,
   mapa2:               21,
@@ -63,8 +58,7 @@ export const ICONS = {
   reservado:           27, // reservado — sem uso definido
   mercado:             28,
   inventario:          29,
-
-  // Linha 4 (30–38)
+  // Linha 4 (30–39)
   overview:            30,
   perfil:              31,
   assistente_conta:    32,
@@ -74,21 +68,24 @@ export const ICONS = {
   village_context:     36,
   village_context_sel: 37,
   info:                38,
-
+  ampulheta:           39,
+  // Linha 5 (40–43)
+  construir:           40,
+  atacar:              41,
+  pesquisar:           42,
+  ataque:              43,
+  voltar:              44,
   // Especiais — canto inferior direito
   configuracoes:       49,
   error:               50,
 }
-
 // ── Função de estilo ─────────────────────────────────────────
 export function useIcons() {
   function iconStyle(indexOrName) {
     const index = typeof indexOrName === 'string'
       ? (ICONS[indexOrName] ?? 0)
       : indexOrName
-
     const { x, y } = gridPos(index)
-
     return {
       backgroundImage:    "url('/icons/icons.png')",
       backgroundRepeat:   'no-repeat',
@@ -101,6 +98,5 @@ export function useIcons() {
       flexShrink:         '0',
     }
   }
-
   return { ICONS, iconStyle }
 }

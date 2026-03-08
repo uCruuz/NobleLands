@@ -13,6 +13,7 @@ import BuildingView from './BuildingView.vue'
 import BarracksView from './BarracksView.vue'
 import SmithView    from './SmithView.vue'
 import MapView      from './MapView.vue'
+import PlaceView  from './PlaceView.vue'
 
 const route        = useRoute()
 const villageStore = useVillageStore()
@@ -40,7 +41,7 @@ const screens = {
   map:      MapView,
   garage:   BuildingView,
   snob:     BuildingView,
-  place:    BuildingView,
+  place:    PlaceView,
   statue:   BuildingView,
   hide:     BuildingView,
   church:   BuildingView,
