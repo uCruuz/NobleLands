@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import { getDb } from '../db/database.js'
-import { flushResources, getBuildingsMap } from '../db/helpers.js'
-import { authMiddleware } from '../middleware/auth.js'
+import { getBuildingsMap } from '../db/helpers.js'
+import { authMiddleware, worldMiddleware } from '../middleware/auth.js'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(worldMiddleware)
 
 const RESEARCH_CONFIGS = {
   axe:      { researchCost: { wood: 200,  stone: 0,   iron: 100  }, researchTime: 1800,  requires: { smith: 2 } },
@@ -17,9 +18,12 @@ const RESEARCH_CONFIGS = {
   catapult: { researchCost: { wood: 1400, stone: 800, iron: 400  }, researchTime: 18000, requires: { garage: 2, smith: 12 } },
 }
 
-async function getUserVillage(userId) {
+async function getUserVillage(userId, worldId) {
   const db = await getDb()
-  const { rows } = await db.query('SELECT * FROM villages WHERE user_id = $1', [userId])
+  const { rows } = await db.query(
+    'SELECT * FROM villages WHERE user_id = $1 AND world_id = $2',
+    [userId, worldId]
+  )
   return rows[0]
 }
 
@@ -31,19 +35,29 @@ async function processResearchQueue(villageId) {
     [villageId, now]
   )
   for (const job of done) {
-    await db.query(
-      `INSERT INTO village_research (village_id, unit_key) VALUES ($1, $2)
-       ON CONFLICT (village_id, unit_key) DO NOTHING`,
-      [villageId, job.unit_key]
-    )
-    await db.query('DELETE FROM research_queue WHERE id = $1', [job.id])
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `INSERT INTO village_research (village_id, unit_key) VALUES ($1, $2)
+         ON CONFLICT (village_id, unit_key) DO NOTHING`,
+        [villageId, job.unit_key]
+      )
+      await client.query('DELETE FROM research_queue WHERE id = $1', [job.id])
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      console.error('[processResearchQueue] Rollback executado:', e)
+    } finally {
+      client.release()
+    }
   }
 }
 
-// ── GET /api/smith ────────────────────────────────────────────────────────
+// ── GET /api/smith?worldId=1 ──────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const village = await getUserVillage(req.user.id)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processResearchQueue(village.id)
@@ -77,7 +91,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ── POST /api/smith/research ──────────────────────────────────────────────
+// ── POST /api/smith/research?worldId=1 ───────────────────────────────────
 router.post('/research', async (req, res) => {
   try {
     const { unitKey } = req.body
@@ -85,7 +99,7 @@ router.post('/research', async (req, res) => {
     const cfg = RESEARCH_CONFIGS[unitKey]
     if (!cfg) return res.status(400).json({ error: 'Pesquisa inválida.' })
 
-    const village = await getUserVillage(req.user.id)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processResearchQueue(village.id)
@@ -113,28 +127,47 @@ router.post('/research', async (req, res) => {
       }
     }
 
-    const resources = await flushResources(village.id)
     const { wood, stone, iron } = cfg.researchCost
 
-    if (resources.wood  < wood)  return res.status(400).json({ error: 'Madeira insuficiente.' })
-    if (resources.stone < stone) return res.status(400).json({ error: 'Argila insuficiente.' })
-    if (resources.iron  < iron)  return res.status(400).json({ error: 'Ferro insuficiente.' })
+    // ── Transação: debita recursos e insere na fila atomicamente ─────────
+    const client = await db.connect()
+    let endsAt
+    try {
+      await client.query('BEGIN')
 
-    await db.query(
-      `UPDATE village_resources
-       SET wood = wood - $1, stone = stone - $2, iron = iron - $3
-       WHERE village_id = $4`,
-      [wood, stone, iron, village.id]
-    )
+      const { rows: resRows } = await client.query(
+        'SELECT wood, stone, iron FROM village_resources WHERE village_id = $1 FOR UPDATE',
+        [village.id]
+      )
+      const res_ = resRows[0]
 
-    const smithLevel   = buildings.smith ?? 1
-    const researchTime = Math.round(cfg.researchTime * Math.pow(1.026, -smithLevel))
-    const endsAt       = Math.floor(Date.now() / 1000) + researchTime
+      if (Number(res_.wood)  < wood)  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Madeira insuficiente.' }) }
+      if (Number(res_.stone) < stone) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Argila insuficiente.' }) }
+      if (Number(res_.iron)  < iron)  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Ferro insuficiente.' }) }
 
-    await db.query(
-      'INSERT INTO research_queue (village_id, unit_key, ends_at) VALUES ($1, $2, $3)',
-      [village.id, unitKey, endsAt]
-    )
+      await client.query(
+        `UPDATE village_resources
+         SET wood = wood - $1, stone = stone - $2, iron = iron - $3
+         WHERE village_id = $4`,
+        [wood, stone, iron, village.id]
+      )
+
+      const smithLevel   = buildings.smith ?? 1
+      const researchTime = Math.round(cfg.researchTime * Math.pow(1.026, -smithLevel))
+      endsAt = Math.floor(Date.now() / 1000) + researchTime
+
+      await client.query(
+        'INSERT INTO research_queue (village_id, unit_key, ends_at) VALUES ($1, $2, $3)',
+        [village.id, unitKey, endsAt]
+      )
+
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      throw e
+    } finally {
+      client.release()
+    }
 
     res.json({ ok: true, endsAt: endsAt * 1000 })
   } catch (e) {
@@ -143,11 +176,12 @@ router.post('/research', async (req, res) => {
   }
 })
 
-// ── POST /api/smith/cancel ────────────────────────────────────────────────
+// ── POST /api/smith/cancel?worldId=1 ─────────────────────────────────────
 router.post('/cancel', async (req, res) => {
   try {
     const { unitKey } = req.body
-    const village = await getUserVillage(req.user.id)
+
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     const db = await getDb()
@@ -159,17 +193,31 @@ router.post('/cancel', async (req, res) => {
     if (!job) return res.status(404).json({ error: 'Pesquisa não encontrada.' })
 
     const cfg = RESEARCH_CONFIGS[unitKey]
-    if (cfg) {
-      const { wood, stone, iron } = cfg.researchCost
-      await db.query(
-        `UPDATE village_resources
-         SET wood = wood + $1, stone = stone + $2, iron = iron + $3
-         WHERE village_id = $4`,
-        [wood, stone, iron, village.id]
-      )
+
+    // ── Transação: devolve recursos e remove da fila atomicamente ────────
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+
+      if (cfg) {
+        const { wood, stone, iron } = cfg.researchCost
+        await client.query(
+          `UPDATE village_resources
+           SET wood = wood + $1, stone = stone + $2, iron = iron + $3
+           WHERE village_id = $4`,
+          [wood, stone, iron, village.id]
+        )
+      }
+
+      await client.query('DELETE FROM research_queue WHERE id = $1', [job.id])
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      throw e
+    } finally {
+      client.release()
     }
 
-    await db.query('DELETE FROM research_queue WHERE id = $1', [job.id])
     res.json({ ok: true })
   } catch (e) {
     console.error(e)

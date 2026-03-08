@@ -107,7 +107,7 @@ export function useMapCanvas(worldId) {
     loading.value = true
     try {
       const auth = useAuthStore()
-      const { data } = await axios.get(`${API}/worlds/${worldId}/map`, {
+      const { data } = await axios.get(`${API}/map/${worldId}`, {
         headers: { Authorization: `Bearer ${auth.token}` },
         params: vp,
       })

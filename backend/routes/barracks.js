@@ -1,15 +1,19 @@
 import { Router } from 'express'
 import { getDb } from '../db/database.js'
-import { flushResources, getBuildingsMap } from '../db/helpers.js'
-import { authMiddleware } from '../middleware/auth.js'
+import { getBuildingsMap } from '../db/helpers.js'
+import { authMiddleware, worldMiddleware } from '../middleware/auth.js'
 import { UNIT_CONFIGS, getTrainTime } from '../../shared/units.js'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(worldMiddleware)
 
-async function getUserVillage(userId) {
+async function getUserVillage(userId, worldId) {
   const db = await getDb()
-  const { rows } = await db.query('SELECT * FROM villages WHERE user_id = $1', [userId])
+  const { rows } = await db.query(
+    'SELECT * FROM villages WHERE user_id = $1 AND world_id = $2',
+    [userId, worldId]
+  )
   return rows[0]
 }
 
@@ -21,19 +25,29 @@ async function processTrainQueue(villageId) {
     [villageId, now]
   )
   for (const job of done) {
-    await db.query(
-      `INSERT INTO village_units (village_id, unit_key, count) VALUES ($1, $2, $3)
-       ON CONFLICT (village_id, unit_key) DO UPDATE SET count = village_units.count + EXCLUDED.count`,
-      [villageId, job.unit_key, job.count]
-    )
-    await db.query('DELETE FROM train_queue WHERE id = $1', [job.id])
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        `INSERT INTO village_units (village_id, unit_key, count) VALUES ($1, $2, $3)
+         ON CONFLICT (village_id, unit_key) DO UPDATE SET count = village_units.count + EXCLUDED.count`,
+        [villageId, job.unit_key, job.count]
+      )
+      await client.query('DELETE FROM train_queue WHERE id = $1', [job.id])
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      console.error('[processTrainQueue] Rollback executado:', e)
+    } finally {
+      client.release()
+    }
   }
 }
 
-// ── GET /api/barracks ─────────────────────────────────────────────────────
+// ── GET /api/barracks?worldId=1 ───────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const village = await getUserVillage(req.user.id)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processTrainQueue(village.id)
@@ -67,7 +81,7 @@ router.get('/', async (req, res) => {
   }
 })
 
-// ── POST /api/barracks/train ──────────────────────────────────────────────
+// ── POST /api/barracks/train?worldId=1 ───────────────────────────────────
 router.post('/train', async (req, res) => {
   try {
     const { unitKey, count } = req.body
@@ -76,7 +90,7 @@ router.post('/train', async (req, res) => {
     if (!unitKey || !UNIT_CONFIGS[unitKey]) return res.status(400).json({ error: 'Unidade inválida.' })
     if (!qty || qty < 1)                    return res.status(400).json({ error: 'Quantidade inválida.' })
 
-    const village = await getUserVillage(req.user.id)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processTrainQueue(village.id)
@@ -91,36 +105,55 @@ router.post('/train', async (req, res) => {
       }
     }
 
-    const resources  = await flushResources(village.id)
     const totalWood  = cfg.wood  * qty
     const totalStone = cfg.stone * qty
     const totalIron  = cfg.iron  * qty
 
-    if (resources.wood  < totalWood)  return res.status(400).json({ error: 'Madeira insuficiente.' })
-    if (resources.stone < totalStone) return res.status(400).json({ error: 'Argila insuficiente.' })
-    if (resources.iron  < totalIron)  return res.status(400).json({ error: 'Ferro insuficiente.' })
+    // ── Transação: debita recursos e insere na fila atomicamente ─────────
+    const client = await db.connect()
+    let endsAt
+    try {
+      await client.query('BEGIN')
 
-    await db.query(
-      `UPDATE village_resources
-       SET wood = wood - $1, stone = stone - $2, iron = iron - $3
-       WHERE village_id = $4`,
-      [totalWood, totalStone, totalIron, village.id]
-    )
+      const { rows: resRows } = await client.query(
+        'SELECT wood, stone, iron FROM village_resources WHERE village_id = $1 FOR UPDATE',
+        [village.id]
+      )
+      const res_ = resRows[0]
 
-    const timePerUnit = getTrainTime(unitKey, buildings.barracks ?? 1)
-    const totalTime   = timePerUnit * qty
+      if (Number(res_.wood)  < totalWood)  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Madeira insuficiente.' }) }
+      if (Number(res_.stone) < totalStone) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Argila insuficiente.' }) }
+      if (Number(res_.iron)  < totalIron)  { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Ferro insuficiente.' }) }
 
-    const { rows: lastRows } = await db.query(
-      'SELECT MAX(ends_at) AS last FROM train_queue WHERE village_id = $1',
-      [village.id]
-    )
-    const startsAt = lastRows[0]?.last ?? Math.floor(Date.now() / 1000)
-    const endsAt   = startsAt + totalTime
+      await client.query(
+        `UPDATE village_resources
+         SET wood = wood - $1, stone = stone - $2, iron = iron - $3
+         WHERE village_id = $4`,
+        [totalWood, totalStone, totalIron, village.id]
+      )
 
-    await db.query(
-      'INSERT INTO train_queue (village_id, unit_key, count, ends_at) VALUES ($1, $2, $3, $4)',
-      [village.id, unitKey, qty, endsAt]
-    )
+      const timePerUnit = getTrainTime(unitKey, buildings.barracks ?? 1)
+      const totalTime   = timePerUnit * qty
+
+      const { rows: lastRows } = await client.query(
+        'SELECT MAX(ends_at) AS last FROM train_queue WHERE village_id = $1',
+        [village.id]
+      )
+      const startsAt = lastRows[0]?.last ?? Math.floor(Date.now() / 1000)
+      endsAt = startsAt + totalTime
+
+      await client.query(
+        'INSERT INTO train_queue (village_id, unit_key, count, ends_at) VALUES ($1, $2, $3, $4)',
+        [village.id, unitKey, qty, endsAt]
+      )
+
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      throw e
+    } finally {
+      client.release()
+    }
 
     res.json({ ok: true, endsAt: endsAt * 1000 })
   } catch (e) {
@@ -129,11 +162,12 @@ router.post('/train', async (req, res) => {
   }
 })
 
-// ── POST /api/barracks/cancel ─────────────────────────────────────────────
+// ── POST /api/barracks/cancel?worldId=1 ──────────────────────────────────
 router.post('/cancel', async (req, res) => {
   try {
     const { unitKey, endsAt } = req.body
-    const village = await getUserVillage(req.user.id)
+
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     const db = await getDb()
@@ -145,22 +179,36 @@ router.post('/cancel', async (req, res) => {
     if (!job) return res.status(404).json({ error: 'Job de treino não encontrado.' })
 
     const cfg = UNIT_CONFIGS[unitKey]
-    if (cfg) {
-      const refund = 0.9
-      await db.query(
-        `UPDATE village_resources
-         SET wood = wood + $1, stone = stone + $2, iron = iron + $3
-         WHERE village_id = $4`,
-        [
-          Math.floor(cfg.wood  * job.count * refund),
-          Math.floor(cfg.stone * job.count * refund),
-          Math.floor(cfg.iron  * job.count * refund),
-          village.id
-        ]
-      )
+
+    // ── Transação: devolve recursos e remove da fila atomicamente ────────
+    const client = await db.connect()
+    try {
+      await client.query('BEGIN')
+
+      if (cfg) {
+        const refund = 0.9
+        await client.query(
+          `UPDATE village_resources
+           SET wood = wood + $1, stone = stone + $2, iron = iron + $3
+           WHERE village_id = $4`,
+          [
+            Math.floor(cfg.wood  * job.count * refund),
+            Math.floor(cfg.stone * job.count * refund),
+            Math.floor(cfg.iron  * job.count * refund),
+            village.id
+          ]
+        )
+      }
+
+      await client.query('DELETE FROM train_queue WHERE id = $1', [job.id])
+      await client.query('COMMIT')
+    } catch (e) {
+      await client.query('ROLLBACK')
+      throw e
+    } finally {
+      client.release()
     }
 
-    await db.query('DELETE FROM train_queue WHERE id = $1', [job.id])
     res.json({ ok: true })
   } catch (e) {
     console.error(e)

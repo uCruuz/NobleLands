@@ -232,7 +232,7 @@ const SPRITE_MAP = {
   knight:   { grey: [0, 11], color: [0, 11] },
   catapult: { grey: [0, 13], color: [0, 14] },
   archer:   { grey: [0, 16], color: [0, 17] },
-  spy:      { grey: [1, 1],  color: [1, 2]  },
+  spy:      { grey: [1, 2],  color: [1, 3]  },
   snob:     { grey: [1, 4],  color: [1, 5]  },
   light:    { grey: [1, 9],  color: [1, 10] },
   heavy:    { grey: [1, 11], color: [1, 12] },
@@ -296,7 +296,8 @@ function formatTimeLeft(endsAt) {
 async function fetchSmith() {
   try {
     const { data } = await axios.get(`${API}/smith`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     researched.value    = data.researched    ?? {}
     researchQueue.value = data.researchQueue ?? []
@@ -321,7 +322,8 @@ async function cancelResearch(unitKey) {
   errorMsg.value = ''
   try {
     await axios.post(`${API}/smith/cancel`, { unitKey }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     await fetchSmith()
     await villageStore.fetchVillage()
@@ -334,7 +336,8 @@ async function startResearch(unitKey) {
   errorMsg.value = ''
   try {
     await axios.post(`${API}/smith/research`, { unitKey }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     await fetchSmith()
     await villageStore.fetchVillage()

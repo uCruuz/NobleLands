@@ -248,6 +248,8 @@ function canAfford(cost, res) {
 const availableUnits = computed(() =>
   Object.entries(UNIT_CONFIGS)
     .filter(([, cfg]) =>
+      cfg.building === 'barracks' &&
+      cfg.implemented === true &&
       Object.entries(cfg.requires ?? {}).every(
         ([reqKey, reqLevel]) => (buildings.value[reqKey] ?? 0) >= reqLevel
       )
@@ -259,7 +261,9 @@ const lockedUnits = computed(() =>
   Object.entries(UNIT_CONFIGS)
     .filter(([, cfg]) => {
       const reqs = cfg.requires ?? {}
-      return Object.keys(reqs).length > 0 &&
+      return cfg.building === 'barracks' &&
+        cfg.implemented === true &&
+        Object.keys(reqs).length > 0 &&
         Object.entries(reqs).some(([reqKey, reqLevel]) => (buildings.value[reqKey] ?? 0) < reqLevel)
     })
     .map(([key, cfg]) => ({ key, cfg }))
@@ -305,7 +309,8 @@ async function recruitAll() {
 async function fetchBarracks() {
   try {
     const { data } = await axios.get(`${API}/barracks`, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     units.value      = data.units
     buildings.value  = data.buildings

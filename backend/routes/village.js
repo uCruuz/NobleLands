@@ -1,11 +1,12 @@
 import { Router } from 'express'
 import { getDb } from '../db/database.js'
-import { calcResources, flushResources, getBuildingsMap, getResourceRate } from '../db/helpers.js'
-import { authMiddleware } from '../middleware/auth.js'
-import { BUILDING_CONFIGS, getBuildingCost, getBuildingTime } from '../../shared/buildings.js'
+import { calcResources, getBuildingsMap, getResourceRate } from '../db/helpers.js'
+import { authMiddleware, worldMiddleware } from '../middleware/auth.js'
+import { BUILDING_CONFIGS, getBuildingCost, getBuildingTime, getStorageCapacity } from '../../shared/buildings.js'
 
 const router = Router()
 router.use(authMiddleware)
+router.use(worldMiddleware)
 
 const CONFIGS = BUILDING_CONFIGS
 
@@ -69,10 +70,7 @@ async function processQueue(villageId) {
 // ── GET /api/village?worldId=1 ────────────────────────────────────────────
 router.get('/', async (req, res) => {
   try {
-    const worldId = parseInt(req.query.worldId)
-    if (!worldId || isNaN(worldId)) return res.status(400).json({ error: 'worldId é obrigatório.' })
-
-    const village = await getUserVillage(req.user.id, worldId)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processQueue(village.id)
@@ -110,14 +108,11 @@ router.get('/', async (req, res) => {
 // ── POST /api/village/cancel?worldId=1 ───────────────────────────────────
 router.post('/cancel', async (req, res) => {
   try {
-    const worldId = parseInt(req.query.worldId)
-    if (!worldId || isNaN(worldId)) return res.status(400).json({ error: 'worldId é obrigatório.' })
-
     const { buildingKey } = req.body
     if (!buildingKey || typeof buildingKey !== 'string')
       return res.status(400).json({ error: 'buildingKey é obrigatório.' })
 
-    const village = await getUserVillage(req.user.id, worldId)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     const db = await getDb()
@@ -163,9 +158,6 @@ router.post('/cancel', async (req, res) => {
 // ── POST /api/village/build?worldId=1 ────────────────────────────────────
 router.post('/build', async (req, res) => {
   try {
-    const worldId = parseInt(req.query.worldId)
-    if (!worldId || isNaN(worldId)) return res.status(400).json({ error: 'worldId é obrigatório.' })
-
     const { buildingKey } = req.body
     if (!buildingKey || typeof buildingKey !== 'string')
       return res.status(400).json({ error: 'buildingKey é obrigatório.' })
@@ -173,7 +165,7 @@ router.post('/build', async (req, res) => {
     const config = CONFIGS[buildingKey]
     if (!config) return res.status(400).json({ error: 'Edifício inválido.' })
 
-    const village = await getUserVillage(req.user.id, worldId)
+    const village = await getUserVillage(req.user.id, req.worldId)
     if (!village) return res.status(404).json({ error: 'Aldeia não encontrada.' })
 
     await processQueue(village.id)
@@ -214,7 +206,6 @@ router.post('/build', async (req, res) => {
       )
       const resources = resRows[0]
 
-      // Calcula recursos atuais com produção
       const { rows: rateRows } = await client.query(
         'SELECT wood_rate, stone_rate, iron_rate, last_updated FROM village_resources WHERE village_id = $1',
         [village.id]
@@ -226,7 +217,6 @@ router.post('/build', async (req, res) => {
         "SELECT level FROM village_buildings WHERE village_id = $1 AND building_key = 'storage'",
         [village.id]
       )
-      const { getStorageCapacity } = await import('../../shared/buildings.js')
       const cap   = getStorageCapacity(storRows[0]?.level ?? 1)
       const wood  = Math.floor(Math.min(cap, Number(resources.wood)  + Number(r.wood_rate)  * (delta / 3600)))
       const stone = Math.floor(Math.min(cap, Number(resources.stone) + Number(r.stone_rate) * (delta / 3600)))
