@@ -96,7 +96,7 @@ npm run dev
 NobleLands/
 ├── backend/          # API Express + Socket.io
 │   ├── db/           # Conexão e helpers do PostgreSQL
-│   ├── middleware/   # Autenticação JWT
+│   ├── middleware/   # Autenticação JWT e verificação de mundo (worldMiddleware)
 │   ├── routes/       # Endpoints da API
 │   ├── services/     # Lógica de mundos
 │   ├── socket/       # Handlers do Socket.io
