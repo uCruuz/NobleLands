@@ -191,6 +191,15 @@ export async function runMigrations() {
       CREATE INDEX IF NOT EXISTS idx_commands_returns
         ON commands (returns_at_ms) WHERE status = 'returning';
     `)
+
+
+    // Migração incremental — colunas de saque adicionadas ao sistema de combate
+    await client.query(`
+      ALTER TABLE commands ADD COLUMN IF NOT EXISTS loot_wood  INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE commands ADD COLUMN IF NOT EXISTS loot_stone INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE commands ADD COLUMN IF NOT EXISTS loot_iron  INTEGER NOT NULL DEFAULT 0;
+    `)
+
     console.log('[DB] Migrations executadas com sucesso.')
   } finally {
     client.release()

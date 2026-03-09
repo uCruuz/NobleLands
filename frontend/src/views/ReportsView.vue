@@ -137,7 +137,7 @@
                       <div v-for="key in UNIT_ORDER" :key="key" class="ug-cell">
                         <img
                           :src="`/units/${UNIT_IMGS[key]}`"
-                          :class="['ug-icon', { 'ug-icon--zero': !hasTroop(activeReport.data?.troopsSent, key) }]"
+                          :class="['ug-icon', { 'ug-icon--zero': !hasTroop(activeReport.data?.attacker?.troopsSent, key) }]"
                           :title="key"
                         />
                       </div>
@@ -145,15 +145,15 @@
                     <div class="ug-label-col">Quantidade:</div>
                     <div class="ug-qty-row">
                       <div v-for="key in UNIT_ORDER" :key="key"
-                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.troopsSent, key) }]">
-                        {{ activeReport.data?.troopsSent?.[key] ?? 0 }}
+                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.attacker?.troopsSent, key) }]">
+                        {{ activeReport.data?.attacker?.troopsSent?.[key] ?? 0 }}
                       </div>
                     </div>
                     <div class="ug-label-col">Perdas:</div>
                     <div class="ug-lost-row">
                       <div v-for="key in UNIT_ORDER" :key="key"
-                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.troopsLost, key) }]">
-                        {{ activeReport.data?.troopsLost?.[key] ?? 0 }}
+                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.attacker?.troopsLost, key) }]">
+                        {{ activeReport.data?.attacker?.troopsLost?.[key] ?? 0 }}
                       </div>
                     </div>
                   </div>
@@ -181,7 +181,7 @@
                       <div v-for="key in UNIT_ORDER" :key="key" class="ug-cell">
                         <img
                           :src="`/units/${UNIT_IMGS[key]}`"
-                          :class="['ug-icon', { 'ug-icon--zero': !hasTroop(activeReport.data?.defenderTroops, key) }]"
+                          :class="['ug-icon', { 'ug-icon--zero': !hasTroop(activeReport.data?.defender?.troopsSent, key) }]"
                           :title="key"
                         />
                       </div>
@@ -189,15 +189,15 @@
                     <div class="ug-label-col">Quantidade:</div>
                     <div class="ug-qty-row">
                       <div v-for="key in UNIT_ORDER" :key="key"
-                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.defenderTroops, key) }]">
-                        {{ activeReport.data?.defenderTroops?.[key] ?? 0 }}
+                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.defender?.troopsSent, key) }]">
+                        {{ activeReport.data?.defender?.troopsSent?.[key] ?? 0 }}
                       </div>
                     </div>
                     <div class="ug-label-col">Perdas:</div>
                     <div class="ug-lost-row">
                       <div v-for="key in UNIT_ORDER" :key="key"
-                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.defenderLost, key) }]">
-                        {{ activeReport.data?.defenderLost?.[key] ?? 0 }}
+                        :class="['ug-cell', { 'ug-cell--zero': !hasTroop(activeReport.data?.defender?.troopsLost, key) }]">
+                        {{ activeReport.data?.defender?.troopsLost?.[key] ?? 0 }}
                       </div>
                     </div>
                   </div>
