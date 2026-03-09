@@ -137,7 +137,10 @@
                   <span class="unit-count">{{ u.count }}</span>
                 </div>
               </div>
-              <a href="#" class="recrutar-link">» recrutar</a>
+              <a href="#"
+                class="recrutar-link"
+                @click.prevent="router.push(`/game?world=${villageStore.worldId}&village=${village.id}&screen=barracks`)"
+              >» recrutar</a>
             </div>
           </div>
 
@@ -257,6 +260,7 @@ import { useVillageStore } from '../stores/village.js'
 import { useAuthStore } from '../stores/auth.js'
 import { useIcons } from '../composables/useIcons.js'
 import { BUILDING_CONFIGS, formatBuildTime } from '../../../shared/buildings.js'
+import { UNIT_CONFIGS } from '../../../shared/units.js'
 
 const API = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 
@@ -423,18 +427,12 @@ function openBuilding(key) {
   router.push(`/game?world=${villageStore.worldId}&village=${village.value.id}&screen=${key}`)
 }
 
-const unitList = [
-  { key: 'spear',    name: 'Lanceiro',         img: 'unit_spear.webp',    count: 0 },
-  { key: 'sword',    name: 'Espadachim',       img: 'unit_sword.webp',    count: 0 },
-  { key: 'axe',      name: 'Machado',          img: 'unit_axe.webp',      count: 0 },
-  { key: 'spy',      name: 'Espião',           img: 'unit_spy.webp',      count: 0 },
-  { key: 'light',    name: 'Cavalaria Leve',   img: 'unit_light.webp',    count: 0 },
-  { key: 'heavy',    name: 'Cavalaria Pesada', img: 'unit_heavy.webp',    count: 0 },
-  { key: 'ram',      name: 'Aríete',           img: 'unit_ram.webp',      count: 0 },
-  { key: 'catapult', name: 'Catapulta',        img: 'unit_catapult.webp', count: 0 },
-  { key: 'knight',   name: 'Paladino',         img: 'unit_knight.webp',   count: 0 },
-  { key: 'snob',     name: 'Nobre',            img: 'unit_snob.webp',     count: 0 },
-]
+const unitList = computed(() => {
+  const villageUnits = village.value?.units ?? {}
+  return Object.entries(UNIT_CONFIGS)
+    .map(([key, cfg]) => ({ key, name: cfg.name, img: cfg.img, count: villageUnits[key] ?? 0 }))
+    .filter(u => u.count > 0)
+})
 
 let tickInterval    = null
 let commandInterval = null
