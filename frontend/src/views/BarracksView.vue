@@ -191,7 +191,7 @@ import { useIcons } from '../composables/useIcons.js'
 import { BUILDING_CONFIGS, formatBuildTime } from '../../../shared/buildings.js'
 import { UNIT_CONFIGS, getTrainTime, formatTrainTime } from '../../../shared/units.js'
 
-const API = 'http://localhost:9999/api'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:9999/api'
 
 const route        = useRoute()
 const router       = useRouter()
@@ -359,7 +359,8 @@ async function cancelTrain(job) {
   errorMsg.value = ''
   try {
     await axios.post(`${API}/barracks/cancel`, { unitKey: job.unitKey, endsAt: job.endsAt }, {
-      headers: { Authorization: `Bearer ${authStore.token}` }
+      headers: { Authorization: `Bearer ${authStore.token}` },
+      params: { worldId: villageStore.worldId }
     })
     await fetchBarracks()
     await villageStore.fetchVillage()
